@@ -1,11 +1,23 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
 # @Time   : 2022/3/29 14:57
 # @Author : 余少琪
-描述: 发送邮件
-"""
-
+# @Description: 邮件通知发送
+#
+# 【文件作用】
+# 封装 SMTP 邮件发送功能，支持：
+# 1. 测试执行完毕后的常规通知邮件
+# 2. 程序异常时的错误通知邮件
+#
+# 【Java 对比说明】
+# 类似于 Java 中使用 JavaMailSender 发送邮件：
+# MimeMessage message = mailSender.createMimeMessage();
+# MimeMessageHelper helper = new MimeMessageHelper(message);
+# helper.setFrom("test@example.com");
+# helper.setTo(recipients);
+# helper.setSubject(subject);
+# helper.setText(content, true);
+# mailSender.send(message);
 import smtplib
 from email.mime.text import MIMEText
 from utils.other_tools.allure_data.allure_report_data import TestMetrics, AllureFileClean
@@ -13,20 +25,63 @@ from utils import config
 
 
 class SendEmail:
-    """ 发送邮箱 """
+    """
+    邮件发送器
+
+    核心职责：
+    - 发送测试执行报告邮件
+    - 发送程序异常通知邮件
+
+    Java 类比：
+    public class SendEmail {
+        private TestMetrics metrics;
+        private String caseDetail;
+
+        public SendEmail(TestMetrics metrics) { ... }
+        public static void sendMail(List<String> users, String subject, String content) { ... }
+        public void errorMail(String errorMessage) { ... }
+        public void sendMain() { ... }
+    }
+    """
     def __init__(self, metrics: TestMetrics):
+        """
+        初始化邮件发送器
+
+        Args:
+            metrics: 测试执行统计数据
+        """
         self.metrics = metrics
         self.allure_data = AllureFileClean()
+        # 获取失败用例详情（用于邮件内容）
         self.CaseDetail = self.allure_data.get_failed_cases_detail()
 
     @classmethod
     def send_mail(cls, user_list: list, sub, content: str) -> None:
         """
+        发送邮件
 
-        @param user_list: 发件人邮箱
-        @param sub:
-        @param content: 发送内容
-        @return:
+        【发送流程】
+        1. 创建 MIMEText 消息
+        2. 设置主题、发件人、收件人
+        3. 连接 SMTP 服务器
+        4. 登录并发送邮件
+        5. 关闭连接
+
+        Args:
+            user_list: 收件人邮箱列表
+            sub: 邮件主题
+            content: 邮件内容（纯文本）
+
+        Java 类比：
+        public static void sendMail(List<String> userList, String subject, String content) {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message);
+            helper.setFrom(sender);
+            helper.setTo(userList.toArray(new String[0]));
+            helper.setSubject(subject);
+            helper.setText(content);
+            mailSender.send(message);
+        }
         """
         user = "余少琪" + "<" + config.email.send_user + ">"
         message = MIMEText(content, _subtype='plain', _charset='utf-8')
@@ -41,24 +96,32 @@ class SendEmail:
 
     def error_mail(self, error_message: str) -> None:
         """
-        执行异常邮件通知
-        @param error_message: 报错信息
-        @return:
+        发送程序异常通知邮件
+
+        当 run.py 中发生未捕获异常时调用，包含完整的错误堆栈信息。
+
+        Args:
+            error_message: 异常堆栈信息（traceback.format_exc() 的返回值）
         """
         email = config.email.send_list
-        user_list = email.split(',')  # 多个邮箱发送，config文件中直接添加  '806029174@qq.com'
+        user_list = email.split(',')  # 多个邮箱用逗号分隔
 
         sub = config.project_name + "接口自动化执行异常通知"
-        content = f"自动化测试执行完毕，程序中发现异常，请悉知。报错信息如下：\n{error_message}"
+        content = f"自动化测试的执行完毕，程序中发现异常，请悉知。报错信息如下：\n{error_message}"
         self.send_mail(user_list, sub, content)
 
     def send_main(self) -> None:
         """
-        发送邮件
-        :return:
+        发送测试执行报告邮件
+
+        邮件内容包含：
+        - 用例总数、通过/失败/异常/跳过数量
+        - 通过率
+        - 失败用例详情
+        - Jenkins 报告链接
         """
         email = config.email.send_list
-        user_list = email.split(',')  # 多个邮箱发送，yaml文件中直接添加  '806029174@qq.com'
+        user_list = email.split(',')
 
         sub = config.project_name + "接口自动化报告"
         content = f"""

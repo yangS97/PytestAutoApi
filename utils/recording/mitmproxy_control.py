@@ -1,9 +1,27 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
 # @Time   : 2022/3/28 15:46
 # @Author : 余少琪
-"""
+# @Description: 代理录制工具 —— 基于 mitmproxy 拦截 HTTP 请求转 YAML 用例
+#
+# 【文件作用】
+# 通过 mitmproxy 代理拦截 HTTP 请求，自动将接口请求数据转换为 YAML 测试用例。
+# 这样可以直接从浏览器操作中生成测试用例，而不需要手动编写 YAML。
+#
+# 【工作原理】
+# 1. 启动 mitmproxy 代理（默认端口 8080）
+# 2. 浏览器配置代理指向 mitmproxy
+# 3. Counter.response() 拦截每个 HTTP 响应
+# 4. 过滤非目标请求（静态资源等）
+# 5. 提取请求信息（URL、方法、参数、响应等）
+# 6. 生成符合框架规范的 YAML 用例
+#
+# 【启动命令】
+# mitmweb -s ./utils/recording/mitmproxy_control.py -p 8888
+#
+# 【Java 对比说明】
+# 类似于 Java 中使用 BrowserMob Proxy 或 ZAP 拦截请求生成测试用例
+
 from urllib.parse import parse_qs, urlparse
 from typing import Any, Union, Text, List, Dict, Tuple
 import ast
@@ -15,9 +33,21 @@ from ruamel import yaml
 
 class Counter:
     """
-    代理录制，基于 mitmproxy 库拦截获取网络请求
-    将接口请求数据转换成 yaml 测试用例
+    mitmproxy 插件类 —— 拦截 HTTP 响应并生成 YAML 测试用例
+
+    mitmproxy 会在每个 HTTP 响应返回时调用 response() 方法，
+    我们在这个方法中提取请求信息并写入 YAML 文件。
+
     参考资料: https://blog.wolfogre.com/posts/usage-of-mitmproxy/
+
+    Java 类比：
+    类似于实现 BrowserMob Proxy 的 ResponseInterceptor：
+    public class Counter implements ResponseInterceptor {
+        @Override
+        public void process(Response response, HttpMessageContents contents, HttpMessageInfo messageInfo) {
+            // 提取请求信息并生成测试用例
+        }
+    }
     """
 
     def __init__(self, filter_url: List, filename: Text = './data/proxy_data.yaml'):
@@ -29,17 +59,31 @@ class Counter:
 
     def response(self, flow: mitmproxy.http.HTTPFlow) -> None:
         """
-        mitmproxy抓包处理响应，在这里汇总需要数据, 过滤 包含指定url，并且响应格式是 json的
-        :param flow:
-        :return:
+        mitmproxy 拦截 HTTP 响应的处理方法
+
+        这是整个录制工具的核心方法，mitmproxy 会在每个 HTTP 响应返回时调用它。
+
+        【执行流程】
+        1. 过滤掉静态资源（.css/.js/.png/.jpg 等）
+        2. 判断是否是目标域名（filter_url 中配置的）
+        3. 提取请求信息：URL、方法、参数、响应码等
+        4. 生成符合框架规范的 YAML 用例数据
+        5. 写入 YAML 文件（追加模式）
+
+        Args:
+            flow: mitmproxy 的 HTTP 流对象
+                  - flow.request: 请求信息（URL、方法、参数、请求头等）
+                  - flow.response: 响应信息（状态码、响应体等）
         """
-        # 存放需要过滤的接口
+        # 需要过滤的文件后缀（静态资源，不生成测试用例）
         filter_url_type = ['.css', '.js', '.map', '.ico', '.png', '.woff', '.map3', '.jpeg', '.jpg']
         url = flow.request.url
+
+        # 记录日志到 mitmproxy 控制台
         ctx.log.info("=" * 100)
-        # 判断过滤掉含 filter_url_type 中后缀的 url
+
+        # 判断：只处理非静态资源且是目标域名的请求
         if any(i in url for i in filter_url_type) is False:
-            # 存放测试用例
             if self.filter_url(url):
 
                 data = self.data_handle(flow.request.text)
@@ -216,10 +260,21 @@ class Counter:
         return result, url_path
 
 
-# 1、本机需要设置代理，默认端口为: 8080
-# 2、控制台输入 mitmweb -s .\utils\recording\mitmproxy_control.py - p 8888命令开启代理模式进行录制
+# ==================== mitmproxy 插件配置 ====================
 
+# 启动方式：
+# 1. 本机设置代理，默认端口 8080
+# 2. 控制台执行命令：
+#    mitmweb -s ./utils/recording/mitmproxy_control.py -p 8888
+# 3. 浏览器配置代理指向 127.0.0.1:8888
+# 4. 访问目标网站，拦截的请求会自动转换为 YAML 用例
+#
+# 注意事项：
+# - 需要安装 mitmproxy：pip install mitmproxy
+# - 拦截的 HTTPS 需要安装 mitmproxy 的 CA 证书
+# - 录制完成后，手动检查生成的 YAML 用例，补充断言数据
 
 addons = [
+    # 配置需要拦截的域名
     Counter(["https://www.wanandroid.com"])
     ]

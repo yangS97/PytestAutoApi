@@ -10,7 +10,6 @@ import urllib3
 from utils.other_tools.allure_data.allure_report_data import TestMetrics
 from utils import config
 
-
 urllib3.disable_warnings()
 
 try:
@@ -21,26 +20,57 @@ except AttributeError:
 
 def is_not_null_and_blank_str(content):
     """
-  非空字符串
-  :param content: 字符串
-  :return: 非空 - True，空 - False
-  """
+    判断字符串是否非空且非空白字符
+
+    Args:
+        content: 字符串
+
+    Returns:
+        bool: 非空返回 True，空返回 False
+    """
     return bool(content and content.strip())
 
 
 class FeiShuTalkChatBot:
-    """飞书机器人通知"""
+    """
+    飞书机器人通知发送器
+
+    核心职责：
+    - 发送文本消息
+    - 发送富文本消息（Post 类型，支持链接、@用户、图片等）
+    - 发送测试报告通知
+
+    飞书机器人使用 Webhook 发送消息，无需签名验证（与钉钉不同）。
+
+    Java 类比：
+    public class FeiShuTalkChatBot {
+        private TestMetrics metrics;
+
+        public FeiShuTalkChatBot(TestMetrics metrics) { ... }
+        public Map<String, Object> post() { ... }
+    }
+    """
     def __init__(self, metrics: TestMetrics):
+        """
+        初始化飞书机器人
+
+        Args:
+            metrics: 测试执行统计数据
+        """
         self.metrics = metrics
 
     def send_text(self, msg: str):
         """
-    消息类型为text类型
-    :param msg: 消息内容
-    :return: 返回消息发送结果
-    """
+        发送文本类型消息
+
+        Args:
+            msg: 消息内容
+
+        Returns:
+            发送结果
+        """
         data = {"msg_type": "text", "at": {}}
-        if is_not_null_and_blank_str(msg):  # 传入msg非空
+        if is_not_null_and_blank_str(msg):
             data["content"] = {"text": msg}
         else:
             logging.error("text类型，消息内容不能为空！")
@@ -51,9 +81,19 @@ class FeiShuTalkChatBot:
 
     def post(self):
         """
-    发送消息（内容UTF-8编码）
-    :return: 返回消息发送结果
-    """
+        发送富文本消息（内容 UTF-8 编码）
+
+        【消息内容】
+        - 测试报告链接
+        - 测试人员
+        - 运行环境
+        - 成功率
+        - 成功/失败/异常/跳过用例数
+        - 执行时间
+
+        Returns:
+            dict: 飞书 API 返回结果
+        """
         rich_text = {
             "email": "1603453211@qq.com",
             "msg_type": "post",
@@ -71,74 +111,28 @@ class FeiShuTalkChatBot:
                                 {
                                     "tag": "at",
                                     "user_id": "ou_18eac85d35a26f989317ad4f02e8bbbb"
-                                    # "text":"陈锐男"
                                 }
                             ],
                             [
-                                {
-                                    "tag": "text",
-                                    "text": "测试  人员 : "
-                                },
-                                {
-                                    "tag": "text",
-                                    "text": f"{config.tester_name}"
-                                }
+                                {"tag": "text", "text": "测试  人员 : "},
+                                {"tag": "text", "text": f"{config.tester_name}"}
                             ],
                             [
-                                {
-                                    "tag": "text",
-                                    "text": "运行  环境 : "
-                                },
-                                {
-                                    "tag": "text",
-                                    "text": f"{config.env}"
-                                }
+                                {"tag": "text", "text": "运行  环境 : "},
+                                {"tag": "text", "text": f"{config.env}"}
                             ],
-                            [{
-                                "tag": "text",
-                                "text": "成   功   率 : "
-                            },
-                                {
-                                    "tag": "text",
-                                    "text": f"{self.metrics.pass_rate} %"
-                                }],  # 成功率
-
-                            [{
-                                "tag": "text",
-                                "text": "成功用例数 : "
-                            },
-                                {
-                                    "tag": "text",
-                                    "text": f"{self.metrics.passed}"
-                                }],  # 成功用例数
-
-                            [{
-                                "tag": "text",
-                                "text": "失败用例数 : "
-                            },
-                                {
-                                    "tag": "text",
-                                    "text": f"{self.metrics.failed}"
-                                }],  # 失败用例数
-                            [{
-                                "tag": "text",
-                                "text": "异常用例数 : "
-                            },
-                                {
-                                    "tag": "text",
-                                    "text": f"{self.metrics.failed}"
-                                }],  # 损坏用例数
+                            [{"tag": "text", "text": "成   功   率 : "},
+                             {"tag": "text", "text": f"{self.metrics.pass_rate} %"}],
+                            [{"tag": "text", "text": "成功用例数 : "},
+                             {"tag": "text", "text": f"{self.metrics.passed}"}],
+                            [{"tag": "text", "text": "失败用例数 : "},
+                             {"tag": "text", "text": f"{self.metrics.failed}"}],
+                            [{"tag": "text", "text": "异常用例数 : "},
+                             {"tag": "text", "text": f"{self.metrics.failed}"}],
                             [
-                                {
-                                    "tag": "text",
-                                    "text": "时  间 : "
-                                },
-                                {
-                                    "tag": "text",
-                                    "text": f"{datetime.datetime.now().strftime('%Y-%m-%d')}"
-                                }
+                                {"tag": "text", "text": "时  间 : "},
+                                {"tag": "text", "text": f"{datetime.datetime.now().strftime('%Y-%m-%d')}"}
                             ],
-
                             [
                                 {
                                     "tag": "img",
@@ -156,26 +150,27 @@ class FeiShuTalkChatBot:
 
         post_data = json.dumps(rich_text)
         response = requests.post(
-                config.lark.webhook,
-                headers=headers,
-                data=post_data,
-                verify=False
+            config.lark.webhook,
+            headers=headers,
+            data=post_data,
+            verify=False
         )
         result = response.json()
 
+        # 判断发送是否成功，失败则发送错误通知
         if result.get('StatusCode') != 0:
             time_now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
             result_msg = result['errmsg'] if result.get('errmsg', False) else '未知异常'
             error_data = {
                 "msgtype": "text",
                 "text": {
-                            "content": f"[注意-自动通知]飞书机器人消息发送失败，时间：{time_now}，"
-                                       f"原因：{result_msg}，请及时跟进，谢谢!"
+                    "content": f"[注意-自动通知]飞书机器人消息发送失败，时间：{time_now}，"
+                               f"原因：{result_msg}，请及时跟进，谢谢!"
                 },
                 "at": {
-                            "isAtAll": False
-                        }
-                    }
+                    "isAtAll": False
+                }
+            }
             logging.error("消息发送失败，自动通知：%s", error_data)
             requests.post(config.lark.webhook, headers=headers, data=json.dumps(error_data))
         return result
