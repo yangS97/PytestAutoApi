@@ -1,0 +1,11 @@
+INFO     /Users/ys/PyCharmProject/PytestAutoApi/logs/info-2026-04-14.log:log_decorator.py:82 
+======================================================
+用例标题: 给指定人设绑定评估包
+请求路径: https://api-test.yanjiai.com/api/v1/practice/persona/consultation_evaluate_select
+请求方式: POST
+请求头:   {'User-Agent': 'python-requests/2.32.5', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Content-Type': 'application/json', 'Authorization': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIwMzQxMDYxNzI3MDMwMjMxMDYsInRlcm1pbmFsVHlwZSI6IlBDIiwiZXhwIjoxNzc4Njk1Nzk5LCJ0ZW5hbnRJZCI6MjAzMTk2OTcyOTI2MTUxMDY1OCwibGFzdFBlcm1pc3Npb25VcGRhdGVUaW1lIjpudWxsfQ.eMvegdLHnmUD3wR7_bZ29oQDKy9bYVSAhAa1cOk0HGg', 'Content-Length': '74'}
+请求内容: {'evaluationPackageId': '2038495890286370817', 'id': '686759099546734609'}
+接口响应内容: {"code":200,"msg":"success","data":true}
+接口响应时长: 61 ms
+Http状态码: 200
+=====================================================

@@ -1,0 +1,11 @@
+INFO     /Users/ys/PyCharmProject/PytestAutoApi/logs/info-2026-04-14.log:log_decorator.py:82 
+======================================================
+用例标题: 获取可选评估包列表-设置默认
+请求路径: https://api-test.yanjiai.com/api/v1/practice/persona/consultation_evaluate_page
+请求方式: POST
+请求头:   {'User-Agent': 'python-requests/2.32.5', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive', 'Content-Type': 'application/json', 'Authorization': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIwMzQxMDYxNzI3MDMwMjMxMDYsInRlcm1pbmFsVHlwZSI6IlBDIiwiZXhwIjoxNzc4Njk1Nzk5LCJ0ZW5hbnRJZCI6MjAzMTk2OTcyOTI2MTUxMDY1OCwibGFzdFBlcm1pc3Npb25VcGRhdGVUaW1lIjpudWxsfQ.eMvegdLHnmUD3wR7_bZ29oQDKy9bYVSAhAa1cOk0HGg', 'Content-Length': '10'}
+请求内容: {'id': ''}
+接口响应内容: {"code":200,"msg":"success","data":[{"id":"2038495890286370817","name":"医疗美容行业线下销售接诊质量评估-修改","remake":"医疗美容行业线下销售接诊质量评估修改","type":"医美","status":0,"rule":null,"ruleGroupName":null,"createBy":8,"createUser":"系统","updateTime":"2026-03-31 10:36:44","isSelect":null},{"id":"2031980898248466434","name":"通用评估包","remake":null,"type":null,"status":0,"rule":null,"ruleGroupName":null,"createBy":8,"createUser":"系统","updateTime":"2026-04-10 14:31:02","isSelect":null}]}
+接口响应时长: 57 ms
+Http状态码: 200
+=====================================================

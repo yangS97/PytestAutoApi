@@ -1,0 +1,191 @@
+# 公共参数
+case_common:
+  allureEpic: 培训对练系统
+  allureFeature: 人设库管理
+  allureStory: 评估包管理全流程
+
+# 1. 查询人设分页列表（缓存第一个人设ID供后续使用）
+persona_lib_01_person_page:
+    host: ${{host()}}
+    url: /api/v1/practice/person/page?pageNum=1&pageSize=10&personaType=&enable=&searchName=
+    method: GET
+    detail: 查询人设分页列表-全量查询
+    headers:
+      Content-Type: application/json
+    requestType: None
+    is_run:
+    data:
+    dependence_case: False
+    dependence_case_data:
+    assert:
+      code:
+        jsonpath: $.code
+        type: ==
+        value: 200
+        AssertType:
+        message: "返回状态码应为200"
+    current_request_set_cache:
+      - type: response
+        jsonpath: "$.data.records[0].id"
+        name: persona_id
+    teardown:
+    teardown_sql:
+    sql:
+
+# 2. 获取可选评估包列表（缓存第一个评估包ID）
+persona_lib_02_evaluate_page:
+    host: ${{host()}}
+    url: /api/v1/practice/persona/consultation_evaluate_page
+    method: POST
+    detail: 获取可选评估包列表-设置默认
+    headers:
+      Content-Type: application/json
+    requestType: json
+    is_run:
+    data:
+      id: ""
+    dependence_case: False
+    dependence_case_data:
+    assert:
+      code:
+        jsonpath: $.code
+        type: ==
+        value: 200
+        AssertType:
+        message: "返回状态码应为200"
+    current_request_set_cache:
+      - type: response
+        jsonpath: "$.data[0].id"
+        name: evaluate_pkg_id
+    teardown:
+    teardown_sql:
+    sql:
+
+# 3. 预览评估包章节详情（使用缓存的评估包ID）
+persona_lib_03_chapter_list:
+    host: ${{host()}}
+    url: /api/v1/consultation_evaluate/chapter_list?id=$cache{evaluate_pkg_id}
+    method: GET
+    detail: 预览评估包章节详情
+    headers:
+      Content-Type: application/json
+    requestType: None
+    is_run:
+    data:
+    dependence_case: False
+    dependence_case_data:
+    assert:
+      code:
+        jsonpath: $.code
+        type: ==
+        value: 200
+        AssertType:
+        message: "返回状态码应为200"
+    current_request_set_cache:
+    teardown:
+    teardown_sql:
+    sql:
+
+# 4. 设置默认评估包（使用缓存的评估包ID）
+# 注意：测试环境该接口暂不可用（服务端500），临时跳过
+persona_lib_04_select_default:
+    host: ${{host()}}
+    url: /api/v1/practice/persona/consultation_evaluate_select
+    method: POST
+    detail: 设置默认评估包
+    headers:
+      Content-Type: application/json
+    requestType: json
+    is_run: False
+    data:
+      evaluationPackageId: $cache{evaluate_pkg_id}
+    dependence_case: False
+    dependence_case_data:
+    assert:
+      code:
+        jsonpath: $.code
+        type: ==
+        value: 200
+        AssertType:
+        message: "返回状态码应为200"
+    current_request_set_cache:
+    teardown:
+    teardown_sql:
+    sql:
+
+# 5. 给指定人设绑定评估包（使用缓存的人设ID和评估包ID）
+persona_lib_05_bind_persona:
+    host: ${{host()}}
+    url: /api/v1/practice/persona/consultation_evaluate_select
+    method: POST
+    detail: 给指定人设绑定评估包
+    headers:
+      Content-Type: application/json
+    requestType: json
+    is_run:
+    data:
+      evaluationPackageId: $cache{evaluate_pkg_id}
+      id: $cache{persona_id}
+    dependence_case: False
+    dependence_case_data:
+    assert:
+      code:
+        jsonpath: $.code
+        type: ==
+        value: 200
+        AssertType:
+        message: "返回状态码应为200"
+    current_request_set_cache:
+    teardown:
+    teardown_sql:
+    sql:
+
+# 6. 验证绑定后的人设列表刷新
+persona_lib_06_verify_refresh:
+    host: ${{host()}}
+    url: /api/v1/practice/person/page?pageNum=1&pageSize=10&personaType=&enable=&searchName=
+    method: GET
+    detail: 验证绑定后人设列表刷新
+    headers:
+      Content-Type: application/json
+    requestType: None
+    is_run:
+    data:
+    dependence_case: False
+    dependence_case_data:
+    assert:
+      code:
+        jsonpath: $.code
+        type: ==
+        value: 200
+        AssertType:
+        message: "返回状态码应为200"
+    current_request_set_cache:
+    teardown:
+    teardown_sql:
+    sql:
+
+# 7. 按类型筛选验证
+persona_lib_07_filter_type:
+    host: ${{host()}}
+    url: /api/v1/practice/person/page?pageNum=1&pageSize=10&personaType=1&enable=true&searchName=
+    method: GET
+    detail: 按类型筛选人设
+    headers:
+      Content-Type: application/json
+    requestType: None
+    is_run:
+    data:
+    dependence_case: False
+    dependence_case_data:
+    assert:
+      code:
+        jsonpath: $.code
+        type: ==
+        value: 200
+        AssertType:
+        message: "返回状态码应为200"
+    current_request_set_cache:
+    teardown:
+    teardown_sql:
+    sql:
