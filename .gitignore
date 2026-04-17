@@ -5,6 +5,25 @@
 /.vscode/
 /bin/
 
+# =========================
+# 新架构补充：Python / Node / 构建产物
+# 这些目录在重构之后会稳定出现，如果不忽略，git 很快会被本地环境噪音污染。
+# =========================
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+dist/
+build/
+htmlcov/
+.coverage*
+coverage/
+platform/frontend/node_modules/
+platform/frontend/dist/
+
 .classpath
 .project
 .settings

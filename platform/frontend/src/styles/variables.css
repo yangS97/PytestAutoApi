@@ -1,0 +1,33 @@
+:root {
+  color-scheme: light;
+
+  --color-bg: #eff4fb;
+  --color-bg-secondary: #f8fbff;
+  --color-surface: rgba(255, 255, 255, 0.88);
+  --color-surface-strong: rgba(255, 255, 255, 0.96);
+  --color-border: rgba(148, 163, 184, 0.24);
+
+  --color-ink-base: #132238;
+  --color-ink-muted: #43556f;
+  --color-ink-subtle: #667790;
+  --color-ink-inverse: #f4f8ff;
+
+  --color-accent: #5f7cff;
+  --color-accent-strong: #365ee6;
+  --color-accent-soft: rgba(95, 124, 255, 0.14);
+
+  --shadow-soft: 0 18px 45px rgba(31, 46, 85, 0.08);
+  --shadow-floating: 0 28px 80px rgba(31, 46, 85, 0.12);
+
+  --radius-large: 1.5rem;
+  --radius-medium: 1rem;
+  --radius-small: 0.75rem;
+
+  --font-sans:
+    'Avenir Next',
+    'PingFang SC',
+    'Microsoft YaHei',
+    'Noto Sans SC',
+    sans-serif;
+}
+

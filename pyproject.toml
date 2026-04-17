@@ -1,0 +1,58 @@
+# 这里使用 pyproject.toml 作为新架构的统一 Python 工程入口。
+# 对新手来说，可以把它理解成：
+# 1. 告诉 Python 这个项目如何打包/安装
+# 2. 告诉开发工具（如 ruff、pytest）应该按什么规则工作
+# 3. 让新旧架构可以在同一个仓库里逐步共存，而不是继续只靠 requirements.txt
+
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pytest-auto-api-modernized"
+version = "0.1.0"
+description = "Modernized API testing engine and platform scaffold for PytestAutoApi."
+readme = "README.md"
+# 当前这台机器的本地 Python 是 3.9，所以第一阶段先以 3.9 作为最低版本。
+# 这样骨架代码可以立即在本地安装和验证，而不会被版本门槛挡住。
+requires-python = ">=3.9"
+dependencies = [
+  # FastAPI 是新平台后端的主框架。
+  "fastapi>=0.115.12,<1.0.0",
+  # uvicorn 是本地启动 FastAPI 服务最常用的 ASGI 服务器。
+  "uvicorn[standard]>=0.34.1,<1.0.0",
+  # Pydantic v2 + settings 负责新架构里的类型模型和配置加载。
+  "pydantic>=2.11.3,<3.0.0",
+  "pydantic-settings>=2.8.1,<3.0.0",
+  # HTTPX 是新引擎中的 HTTP 客户端，替代旧架构里直接散落使用的 requests 风格。
+  "httpx>=0.28.1,<1.0.0",
+  # 兼容旧 YAML 用例时仍然需要读取 YAML。
+  "PyYAML>=6.0.2,<7.0.0",
+  # SQLAlchemy 作为平台真源的数据层基础；第一阶段先把依赖放好，后续逐步落表结构。
+  "SQLAlchemy>=2.0.40,<3.0.0",
+  # APScheduler 用于轻量级调度。第一阶段不会上重型消息队列。
+  "APScheduler>=3.10.4,<4.0.0",
+  # 预留文件上传/导入接口能力，比如后续的 Excel / OpenAPI 导入。
+  "python-multipart>=0.0.20,<1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  # pytest 负责新引擎与新平台骨架的结构性测试。
+  "pytest>=8.3.5,<9.0.0",
+  "pytest-asyncio>=0.26.0,<1.0.0",
+  # ruff 用来做基础静态检查与 import 排序。
+  "ruff>=0.11.6,<1.0.0",
+]
+
+[tool.hatch.build.targets.wheel]
+# 目前先把真正需要作为 Python package 暴露的部分限制在 testflow_engine。
+# platform/backend 更像一个应用目录，而不是要单独发布到 PyPI 的库。
+packages = ["src/testflow_engine"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
