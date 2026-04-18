@@ -11,8 +11,6 @@ run -> case -> transport -> assertion -> report
 from datetime import datetime
 
 from ..assertions import AssertionEngine
-from .transport import TransportAdapter, TransportNotConfiguredError
-from .rendering import RequestTemplateRenderer
 from ..models import (
     CaseExecutionResult,
     ExecutionContext,
@@ -23,8 +21,9 @@ from ..models import (
     TestCaseDefinition,
     TestRunDefinition,
 )
-from ..plugins import EnginePlugin
 from ..reporting import ReportCollector
+from .rendering import RequestTemplateRenderer
+from .transport import TransportAdapter, TransportNotConfiguredError
 
 
 class TestFlowEngine:
@@ -71,7 +70,11 @@ class TestFlowEngine:
             plugin.after_run(result=result, context=context)
         return result
 
-    def execute_case(self, case: TestCaseDefinition, context: ExecutionContext) -> CaseExecutionResult:
+    def execute_case(
+        self,
+        case: TestCaseDefinition,
+        context: ExecutionContext,
+    ) -> CaseExecutionResult:
         """执行单个 case。"""
 
         started_at = datetime.utcnow()

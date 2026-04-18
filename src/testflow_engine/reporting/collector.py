@@ -6,7 +6,6 @@
 """
 
 from datetime import datetime
-from typing import List
 
 from pydantic import BaseModel, Field
 
@@ -24,13 +23,13 @@ class ReportSnapshot(BaseModel):
     run_id: str
     generated_at: datetime
     summary: ReportSummary
-    cases: List[CaseExecutionResult] = Field(default_factory=list)
+    cases: list[CaseExecutionResult] = Field(default_factory=list)
 
 
 class ReportCollector:
     """收集执行结果并构造摘要。"""
 
-    def build_summary(self, cases: List[CaseExecutionResult]) -> ReportSummary:
+    def build_summary(self, cases: list[CaseExecutionResult]) -> ReportSummary:
         """根据 case 结果统计汇总数据。"""
 
         summary = ReportSummary(total=len(cases))

@@ -5,6 +5,8 @@ from testflow_engine import (
     LegacyYamlCompatLoader,
     ResponseSnapshot,
     SelectorType,
+)
+from testflow_engine import (
     TestFlowEngine as FlowEngine,
 )
 
@@ -91,8 +93,14 @@ def test_persona_yaml_shape_keeps_unmigrated_fields_in_request_extras():
     assert first_case.case_id == "persona_lib_01_person_page"
     assert first_case.enabled is True
     assert first_case.request.body_type == BodyType.NONE
-    assert run_definition.cases[2].request.url == "{{host}}/api/v1/consultation_evaluate/chapter_list?id={{cache.evaluate_pkg_id}}"
-    assert run_definition.cases[4].request.body["evaluationPackageId"] == "{{cache.evaluate_pkg_id}}"
+    assert (
+        run_definition.cases[2].request.url
+        == "{{host}}/api/v1/consultation_evaluate/chapter_list?id={{cache.evaluate_pkg_id}}"
+    )
+    assert (
+        run_definition.cases[4].request.body["evaluationPackageId"]
+        == "{{cache.evaluate_pkg_id}}"
+    )
     assert run_definition.cases[4].request.body["id"] == "{{cache.persona_id}}"
     assert first_case.request.extras["legacy_current_request_set_cache"] == [
         {
@@ -102,7 +110,11 @@ def test_persona_yaml_shape_keeps_unmigrated_fields_in_request_extras():
         }
     ]
 
-    skipped_case = next(case for case in run_definition.cases if case.case_id == "persona_lib_04_select_default")
+    skipped_case = next(
+        case
+        for case in run_definition.cases
+        if case.case_id == "persona_lib_04_select_default"
+    )
     assert skipped_case.enabled is False
 
 

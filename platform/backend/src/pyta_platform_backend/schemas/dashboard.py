@@ -5,8 +5,6 @@
 2. 让前端首页能尽快摆脱纯 mock，接上真实后端数据。
 """
 
-from typing import List
-
 from pydantic import BaseModel, Field
 
 
@@ -43,13 +41,15 @@ class DashboardRecentRunResponse(BaseModel):
     started_at: str
     duration: str
     starter: str
-    raw_status: str = Field(..., description="原始 run 状态，便于前端需要时做更细粒度映射")
+    raw_status: str = Field(
+        ...,
+        description="原始 run 状态，便于前端需要时做更细粒度映射",
+    )
 
 
 class DashboardOverviewResponse(BaseModel):
     """首页总览响应。"""
 
-    metrics: List[DashboardMetricResponse] = Field(default_factory=list)
-    focus_items: List[DashboardFocusItemResponse] = Field(default_factory=list)
-    recent_runs: List[DashboardRecentRunResponse] = Field(default_factory=list)
-
+    metrics: list[DashboardMetricResponse] = Field(default_factory=list)
+    focus_items: list[DashboardFocusItemResponse] = Field(default_factory=list)
+    recent_runs: list[DashboardRecentRunResponse] = Field(default_factory=list)

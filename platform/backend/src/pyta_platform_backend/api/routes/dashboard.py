@@ -11,7 +11,11 @@ def create_dashboard_router(dashboard_service: DashboardService) -> APIRouter:
 
     router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-    @router.get("/overview", response_model=DashboardOverviewResponse, status_code=status.HTTP_200_OK)
+    @router.get(
+        "/overview",
+        response_model=DashboardOverviewResponse,
+        status_code=status.HTTP_200_OK,
+    )
     def get_overview() -> DashboardOverviewResponse:
         """返回首页最小总览。
 
@@ -21,4 +25,3 @@ def create_dashboard_router(dashboard_service: DashboardService) -> APIRouter:
         return dashboard_service.get_overview()
 
     return router
-

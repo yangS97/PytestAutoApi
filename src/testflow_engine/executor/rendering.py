@@ -16,7 +16,6 @@ from typing import Any
 from .._field_path import has_field_path, resolve_field_path
 from ..models import ExecutionContext, RequestSpec
 
-
 _TEMPLATE_PATTERN = re.compile(r"{{\s*([^{}]+?)\s*}}")
 
 
@@ -85,5 +84,5 @@ class RequestTemplateRenderer:
         """从上下文变量中读取模板值，未定义时直接失败，避免把脏请求发出去。"""
 
         if not has_field_path(context.variables, selector):
-            raise MissingTemplateVariableError("模板变量未定义: %s" % selector)
+            raise MissingTemplateVariableError(f"模板变量未定义: {selector}")
         return resolve_field_path(context.variables, selector)

@@ -9,7 +9,7 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -105,7 +105,7 @@ class CaseSource(BaseModel):
 
     kind: str = "platform"
     path: Optional[str] = None
-    raw: Dict[str, Any] = Field(default_factory=dict)
+    raw: dict[str, Any] = Field(default_factory=dict)
 
 
 class RequestSpec(BaseModel):
@@ -118,12 +118,12 @@ class RequestSpec(BaseModel):
 
     method: HttpMethod = HttpMethod.GET
     url: str
-    headers: Dict[str, Any] = Field(default_factory=dict)
-    query: Dict[str, Any] = Field(default_factory=dict)
+    headers: dict[str, Any] = Field(default_factory=dict)
+    query: dict[str, Any] = Field(default_factory=dict)
     body_type: BodyType = BodyType.JSON
     body: Any = None
     timeout_seconds: float = 30.0
-    extras: Dict[str, Any] = Field(default_factory=dict)
+    extras: dict[str, Any] = Field(default_factory=dict)
 
 
 class AssertionSpec(BaseModel):
@@ -143,7 +143,7 @@ class AssertionSpec(BaseModel):
     operator: AssertionOperator = AssertionOperator.EQUALS
     expected: Any = None
     message: Optional[str] = None
-    extras: Dict[str, Any] = Field(default_factory=dict)
+    extras: dict[str, Any] = Field(default_factory=dict)
 
 
 class ExtractionSpec(BaseModel):
@@ -160,7 +160,7 @@ class ExtractionSpec(BaseModel):
     source: ExtractionSource = ExtractionSource.RESPONSE_BODY
     target: str = ""
     message: Optional[str] = None
-    extras: Dict[str, Any] = Field(default_factory=dict)
+    extras: dict[str, Any] = Field(default_factory=dict)
 
 
 class TestCaseDefinition(BaseModel):
@@ -174,13 +174,13 @@ class TestCaseDefinition(BaseModel):
     case_id: str
     title: str
     request: RequestSpec
-    assertions: List[AssertionSpec] = Field(default_factory=list)
-    extractors: List[ExtractionSpec] = Field(default_factory=list)
+    assertions: list[AssertionSpec] = Field(default_factory=list)
+    extractors: list[ExtractionSpec] = Field(default_factory=list)
     description: str = ""
     enabled: bool = True
-    tags: List[str] = Field(default_factory=list)
-    plugins: List[str] = Field(default_factory=list)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    plugins: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     source: CaseSource = Field(default_factory=CaseSource)
 
 
@@ -193,9 +193,9 @@ class TestRunDefinition(BaseModel):
 
     run_id: str = Field(default_factory=lambda: str(uuid4()))
     name: str = "unnamed-run"
-    cases: List[TestCaseDefinition] = Field(default_factory=list)
-    variables: Dict[str, Any] = Field(default_factory=dict)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    cases: list[TestCaseDefinition] = Field(default_factory=list)
+    variables: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ResponseSnapshot(BaseModel):
@@ -206,7 +206,7 @@ class ResponseSnapshot(BaseModel):
     """
 
     status_code: int
-    headers: Dict[str, Any] = Field(default_factory=dict)
+    headers: dict[str, Any] = Field(default_factory=dict)
     body: Any = None
     elapsed_ms: float = 0.0
     request_id: Optional[str] = None
@@ -232,7 +232,7 @@ class StepExecutionResult(BaseModel):
     name: str
     status: ExecutionStatus
     response: Optional[ResponseSnapshot] = None
-    assertions: List[AssertionResult] = Field(default_factory=list)
+    assertions: list[AssertionResult] = Field(default_factory=list)
     error: Optional[str] = None
     started_at: datetime
     finished_at: datetime
@@ -244,7 +244,7 @@ class CaseExecutionResult(BaseModel):
     case_id: str
     title: str
     status: ExecutionStatus
-    steps: List[StepExecutionResult] = Field(default_factory=list)
+    steps: list[StepExecutionResult] = Field(default_factory=list)
     error: Optional[str] = None
     started_at: datetime
     finished_at: datetime
@@ -266,7 +266,7 @@ class RunExecutionResult(BaseModel):
     run_id: str
     name: str
     status: ExecutionStatus
-    cases: List[CaseExecutionResult] = Field(default_factory=list)
+    cases: list[CaseExecutionResult] = Field(default_factory=list)
     summary: ReportSummary = Field(default_factory=ReportSummary)
     started_at: datetime
     finished_at: datetime
@@ -283,10 +283,10 @@ class ExecutionContext(BaseModel):
     """
 
     run_id: str
-    variables: Dict[str, Any] = Field(default_factory=dict)
-    artifacts: Dict[str, Any] = Field(default_factory=dict)
-    plugin_state: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
-    legacy_documents: List[str] = Field(default_factory=list)
+    variables: dict[str, Any] = Field(default_factory=dict)
+    artifacts: dict[str, Any] = Field(default_factory=dict)
+    plugin_state: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    legacy_documents: list[str] = Field(default_factory=list)
 
     def set_variable(self, key: str, value: Any) -> None:
         """写入运行变量。"""

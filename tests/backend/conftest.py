@@ -3,7 +3,6 @@
 import sys
 from pathlib import Path
 
-
 BACKEND_SRC = Path(__file__).resolve().parents[2] / "platform" / "backend" / "src"
 
 # 测试只把后端 src 目录加入搜索路径，不把顶层 platform 做成 Python 包，

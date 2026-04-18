@@ -9,8 +9,6 @@
 这里先定义稳定 hook，后续实现可以在不破坏上层调用方的前提下逐步变强。
 """
 
-from abc import ABC
-
 from ..models import (
     CaseExecutionResult,
     ExecutionContext,
@@ -21,7 +19,7 @@ from ..models import (
 )
 
 
-class EnginePlugin(ABC):
+class EnginePlugin:
     """引擎插件基类，默认全部为 no-op。"""
 
     name = "unnamed-plugin"

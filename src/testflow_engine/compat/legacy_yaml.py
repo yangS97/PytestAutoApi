@@ -18,7 +18,8 @@ legacy YAML -> 新引擎标准模型
 """
 
 import re
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from collections.abc import Iterable
+from typing import Any, Optional
 
 import yaml
 from pydantic import BaseModel, Field
@@ -41,8 +42,8 @@ class LegacyYamlDocument(BaseModel):
     """解析后的 legacy YAML 文档。"""
 
     source_path: Optional[str] = None
-    case_common: Dict[str, Any] = Field(default_factory=dict)
-    raw_cases: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    case_common: dict[str, Any] = Field(default_factory=dict)
+    raw_cases: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class LegacyYamlCompatLoader:
@@ -76,11 +77,15 @@ class LegacyYamlCompatLoader:
     def load_from_path(self, path: str) -> LegacyYamlDocument:
         """从 YAML 文件加载 legacy 文档。"""
 
-        with open(path, "r", encoding="utf-8") as file:
+        with open(path, encoding="utf-8") as file:
             payload = yaml.safe_load(file) or {}
         return self.load_from_dict(payload=payload, source_path=path)
 
-    def load_from_dict(self, payload: Dict[str, Any], source_path: str = None) -> LegacyYamlDocument:
+    def load_from_dict(
+        self,
+        payload: dict[str, Any],
+        source_path: str = None,
+    ) -> LegacyYamlDocument:
         """从字典直接构造 legacy 文档，方便测试和后续平台接入。"""
 
         case_common = payload.get("case_common") or {}
@@ -124,8 +129,8 @@ class LegacyYamlCompatLoader:
     def _convert_case(
         self,
         case_id: str,
-        raw_case: Dict[str, Any],
-        case_common: Dict[str, Any],
+        raw_case: dict[str, Any],
+        case_common: dict[str, Any],
         source_path: str = None,
     ) -> TestCaseDefinition:
         """转换单个 legacy case。"""
@@ -169,7 +174,7 @@ class LegacyYamlCompatLoader:
             ),
         )
 
-    def _convert_assertions(self, legacy_assertions: Any) -> List[AssertionSpec]:
+    def _convert_assertions(self, legacy_assertions: Any) -> list[AssertionSpec]:
         """把 legacy assert 转换成标准断言。
 
         旧仓库里真实出现过两种写法：
@@ -187,7 +192,7 @@ class LegacyYamlCompatLoader:
             selector = item.get("jsonpath") or ""
             assertions.append(
                 AssertionSpec(
-                    name=item.get("name") or legacy_name or "legacy-assert-%s" % index,
+                    name=item.get("name") or legacy_name or f"legacy-assert-{index}",
                     selector=selector,
                     selector_type=SelectorType.JSONPATH if selector else SelectorType.FIELD_PATH,
                     source=AssertionSource.RESPONSE_BODY,
@@ -200,7 +205,9 @@ class LegacyYamlCompatLoader:
         return assertions
 
     @staticmethod
-    def _iter_legacy_assert_items(legacy_assertions: Any) -> Iterable[Tuple[Optional[str], Dict[str, Any]]]:
+    def _iter_legacy_assert_items(
+        legacy_assertions: Any,
+    ) -> Iterable[tuple[Optional[str], dict[str, Any]]]:
         """把旧断言结构统一展开成 `(name, payload)` 序列。"""
 
         if isinstance(legacy_assertions, list):
@@ -236,7 +243,7 @@ class LegacyYamlCompatLoader:
         return bool(raw_value)
 
     @classmethod
-    def _build_tags(cls, case_common: Dict[str, Any]) -> List[str]:
+    def _build_tags(cls, case_common: dict[str, Any]) -> list[str]:
         """从 legacy 的 allure 标签衍生出基础 tags。"""
 
         tags = []
@@ -309,11 +316,11 @@ class LegacyYamlCompatLoader:
         """把 `${{host()}}` 转成 `{{host}}`。"""
 
         function_name = match.group(1)
-        return "{{%s}}" % function_name
+        return f"{{{{{function_name}}}}}"
 
     @staticmethod
     def _replace_legacy_cache(match: re.Match) -> str:
         """把 `$cache{token}` 转成 `{{cache.token}}`。"""
 
         cache_key = match.group(1).strip()
-        return "{{cache.%s}}" % cache_key
+        return f"{{{{cache.{cache_key}}}}}"

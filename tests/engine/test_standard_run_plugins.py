@@ -11,8 +11,14 @@ from testflow_engine import (
     HttpMethod,
     RequestSpec,
     ResponseSnapshot,
+)
+from testflow_engine import (
     TestCaseDefinition as CaseDefinition,
+)
+from testflow_engine import (
     TestFlowEngine as FlowEngine,
+)
+from testflow_engine import (
     TestRunDefinition as RunDefinition,
 )
 
@@ -34,7 +40,9 @@ def test_standard_run_can_use_bootstrap_auth_and_extractors_together():
             headers={"content-type": "application/json"},
         )
 
-    auth_plugin = BootstrapAuthPlugin(http_client=httpx.Client(transport=httpx.MockTransport(login_handler)))
+    auth_plugin = BootstrapAuthPlugin(
+        http_client=httpx.Client(transport=httpx.MockTransport(login_handler))
+    )
 
     seen_headers = {}
 
@@ -131,4 +139,3 @@ def test_standard_run_can_use_bootstrap_auth_and_extractors_together():
     assert result.status == "passed"
     assert seen_headers["list-persona"]["Authorization"] == "real-token-001"
     assert seen_headers["bind-persona"]["Authorization"] == "real-token-001"
-

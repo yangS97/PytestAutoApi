@@ -15,7 +15,6 @@
 import sys
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ENGINE_SRC = REPO_ROOT / "src"
 BACKEND_SRC = REPO_ROOT / "platform" / "backend" / "src"

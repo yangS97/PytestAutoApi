@@ -3,7 +3,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -14,7 +14,7 @@ class DispatchTask:
     suite_id: str
     trigger_source: str
     requested_by: str
-    payload: Dict[str, object]
+    payload: dict[str, object]
     dispatched_at: datetime
 
 
@@ -27,7 +27,7 @@ class MemoryRunDispatcher:
 
     def __init__(self, channel_name: str = "memory-worker") -> None:
         self.channel_name = channel_name
-        self.dispatched_tasks: List[DispatchTask] = []
+        self.dispatched_tasks: list[DispatchTask] = []
 
     def dispatch(self, task: DispatchTask) -> None:
         """记录一次任务投递。"""

@@ -9,7 +9,7 @@
 但运行时 `context.variables["cache"]` 永远不会被真正写入，后续模板渲染自然就会失败。
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from .._field_path import resolve_field_path
 from ..models import ExecutionContext, ResponseSnapshot, TestCaseDefinition

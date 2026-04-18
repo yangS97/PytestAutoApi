@@ -9,7 +9,7 @@
 后续若引入表达式脚本、数据库断言、快照断言，可以继续在这里扩展。
 """
 
-from typing import Any, List
+from typing import Any
 
 from .._field_path import resolve_field_path
 from ..models import (
@@ -34,10 +34,10 @@ class AssertionEngine:
 
     def evaluate_all(
         self,
-        assertions: List[AssertionSpec],
+        assertions: list[AssertionSpec],
         response: ResponseSnapshot,
         context: ExecutionContext,
-    ) -> List[AssertionResult]:
+    ) -> list[AssertionResult]:
         """逐条执行断言，并保留每条断言的详细结果。"""
 
         results = []
@@ -53,9 +53,20 @@ class AssertionEngine:
     ) -> AssertionResult:
         """执行单条断言。"""
 
-        actual = self._resolve_actual(assertion=assertion, response=response, context=context)
-        passed = self._match(operator=assertion.operator, actual=actual, expected=assertion.expected)
-        message = assertion.message or self._build_default_message(assertion=assertion, actual=actual)
+        actual = self._resolve_actual(
+            assertion=assertion,
+            response=response,
+            context=context,
+        )
+        passed = self._match(
+            operator=assertion.operator,
+            actual=actual,
+            expected=assertion.expected,
+        )
+        message = assertion.message or self._build_default_message(
+            assertion=assertion,
+            actual=actual,
+        )
         return AssertionResult(
             name=assertion.name,
             status=ExecutionStatus.PASSED if passed else ExecutionStatus.FAILED,
@@ -75,10 +86,23 @@ class AssertionEngine:
         if assertion.source == AssertionSource.STATUS_CODE:
             return response.status_code
         if assertion.source == AssertionSource.RESPONSE_HEADERS:
-            return self._extract_value(response.headers, assertion.selector, assertion.selector_type)
+            return self._extract_value(
+                response.headers,
+                assertion.selector,
+                assertion.selector_type,
+            )
         if assertion.source == AssertionSource.CONTEXT:
-            return self._extract_value(context.variables, assertion.selector, assertion.selector_type)
-        return self._extract_value(response.body, assertion.selector, assertion.selector_type, response)
+            return self._extract_value(
+                context.variables,
+                assertion.selector,
+                assertion.selector_type,
+            )
+        return self._extract_value(
+            response.body,
+            assertion.selector,
+            assertion.selector_type,
+            response,
+        )
 
     def _extract_value(
         self,
@@ -147,10 +171,10 @@ class AssertionEngine:
             return actual < expected
         if operator == AssertionOperator.LESS_OR_EQUAL:
             return actual <= expected
-        raise ValueError("不支持的断言操作: %s" % operator)
+        raise ValueError(f"不支持的断言操作: {operator}")
 
     @staticmethod
     def _build_default_message(assertion: AssertionSpec, actual: Any) -> str:
         """生成默认断言消息，方便报告层直接展示。"""
 
-        return "断言[%s] 实际值=%r 期望值=%r" % (assertion.name, actual, assertion.expected)
+        return f"断言[{assertion.name}] 实际值={actual!r} 期望值={assertion.expected!r}"

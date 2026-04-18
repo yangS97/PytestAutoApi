@@ -11,7 +11,7 @@
 * 并且后续请求需要统一带上这个 token
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from .._field_path import resolve_field_path
 from ..models import ExecutionContext, TestCaseDefinition, TestRunDefinition
@@ -59,7 +59,7 @@ class BootstrapAuthPlugin(EnginePlugin):
         token_path = str(config.get("token_path") or "data.token")
         token = resolve_field_path(payload, token_path)
         if not token:
-            raise ValueError("登录成功后未能从响应中提取 token: %s" % token_path)
+            raise ValueError(f"登录成功后未能从响应中提取 token: {token_path}")
 
         cache_bucket[token_key] = token
 
@@ -85,7 +85,7 @@ class BootstrapAuthPlugin(EnginePlugin):
             case.request.headers = headers
 
     @staticmethod
-    def _get_auth_config(context: ExecutionContext) -> Optional[Dict[str, Any]]:
+    def _get_auth_config(context: ExecutionContext) -> Optional[dict[str, Any]]:
         """从运行时变量里取 auth bootstrap 配置。"""
 
         raw = context.variables.get("auth_bootstrap")
@@ -110,4 +110,3 @@ class BootstrapAuthPlugin(EnginePlugin):
         if getattr(self, "_owns_client", False) and self._http_client is not None:
             self._http_client.close()
             self._http_client = None
-

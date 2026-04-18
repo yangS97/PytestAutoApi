@@ -6,9 +6,9 @@
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from ..models import TestRunDefinition
 
@@ -30,7 +30,7 @@ class InMemoryScheduler:
     """
 
     def __init__(self) -> None:
-        self._jobs: List[ScheduledJob] = []
+        self._jobs: list[ScheduledJob] = []
 
     def submit(self, job: ScheduledJob) -> None:
         """提交任务，并按执行时间和优先级排序。"""

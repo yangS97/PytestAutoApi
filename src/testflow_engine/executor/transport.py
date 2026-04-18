@@ -14,7 +14,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable
 
 from ..models import BodyType, ExecutionContext, RequestSpec, ResponseSnapshot, TestCaseDefinition
 
@@ -72,7 +72,12 @@ class HttpxTransport(TransportAdapter):
     2. 以后若接入录制回放、重试、代理、异步 transport，执行器不用跟着改。
     """
 
-    def __init__(self, client: Optional["httpx.Client"] = None, *, follow_redirects: bool = True) -> None:
+    def __init__(
+        self,
+        client: httpx.Client | None = None,
+        *,
+        follow_redirects: bool = True,
+    ) -> None:
         httpx_module = _load_httpx()
         self._client = client or httpx_module.Client(follow_redirects=follow_redirects)
         self._owns_client = client is None

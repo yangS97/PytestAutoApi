@@ -1,9 +1,8 @@
 """平台后端配置定义。"""
 
 import os
-from typing import Dict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class BackendSettings(BaseModel):
@@ -43,15 +42,24 @@ class BackendSettings(BaseModel):
         等平台需要更复杂的配置来源时，再替换成专门的配置模块即可。
         """
 
-        raw_values: Dict[str, object] = {
-            "app_name": os.getenv("PLATFORM_BACKEND_APP_NAME", cls._field_default("app_name")),
-            "app_version": os.getenv("PLATFORM_BACKEND_APP_VERSION", cls._field_default("app_version")),
+        raw_values: dict[str, object] = {
+            "app_name": os.getenv(
+                "PLATFORM_BACKEND_APP_NAME",
+                cls._field_default("app_name"),
+            ),
+            "app_version": os.getenv(
+                "PLATFORM_BACKEND_APP_VERSION",
+                cls._field_default("app_version"),
+            ),
             "app_env": os.getenv("PLATFORM_BACKEND_APP_ENV", cls._field_default("app_env")),
             "debug": cls._read_bool(
                 os.getenv("PLATFORM_BACKEND_DEBUG"),
                 default=cls._field_default("debug"),
             ),
-            "api_prefix": os.getenv("PLATFORM_BACKEND_API_PREFIX", cls._field_default("api_prefix")),
+            "api_prefix": os.getenv(
+                "PLATFORM_BACKEND_API_PREFIX",
+                cls._field_default("api_prefix"),
+            ),
             "run_dispatch_channel": os.getenv(
                 "PLATFORM_BACKEND_RUN_DISPATCH_CHANNEL",
                 cls._field_default("run_dispatch_channel"),

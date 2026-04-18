@@ -38,7 +38,7 @@ class DashboardService:
                 label="累计运行",
                 value=str(all_records.total),
                 description="平台主真源里已经登记的运行次数",
-                trend="最近 %s 条可在结果页查看" % len(records.items),
+                trend=f"最近 {len(records.items)} 条可在结果页查看",
             ),
             DashboardMetricResponse(
                 key="queued",
@@ -90,7 +90,7 @@ class DashboardService:
         recent_runs = [
             DashboardRecentRunResponse(
                 id=item.run_id,
-                name="运行 %s" % item.run_id[:8],
+                name=f"运行 {item.run_id[:8]}",
                 target=item.suite_id,
                 status=self._map_run_status(item.status),
                 started_at=self._format_time(item.started_at or item.created_at),
@@ -138,5 +138,4 @@ class DashboardService:
             return "执行中"
         seconds = int((finished_at - created_at).total_seconds())
         minutes, remain_seconds = divmod(seconds, 60)
-        return "%sm %ss" % (minutes, remain_seconds)
-
+        return f"{minutes}m {remain_seconds}s"
