@@ -8,9 +8,13 @@ create run -> dispatch -> worker consume -> update status
 都不会再回到“API 线程自己跑长任务”的旧问题。
 """
 
+from copy import deepcopy
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional
+from typing import Callable, Optional
 
+from pyta_platform_backend.schemas.run import RunDetailResponse, RunStatus, UpdateRunStatusRequest
+from pyta_platform_backend.services.run_service import RunService
+from pyta_platform_backend.workers.dispatcher import DispatchTask, MemoryRunDispatcher
 from testflow_engine import (
     BootstrapAuthPlugin,
     CallableTransport,
@@ -22,9 +26,6 @@ from testflow_engine import (
     TestRunDefinition,
 )
 from testflow_engine.models import ExecutionStatus
-from pyta_platform_backend.schemas.run import RunDetailResponse, RunStatus, UpdateRunStatusRequest
-from pyta_platform_backend.services.run_service import RunService
-from pyta_platform_backend.workers.dispatcher import DispatchTask, MemoryRunDispatcher
 
 
 @dataclass(frozen=True)
@@ -109,7 +110,7 @@ class MemoryWorkerRunner:
 
         return WorkerExecutionResult(
             status=RunStatus.SUCCEEDED,
-            status_message="memory worker finished suite %s" % task.suite_id,
+            status_message=f"memory worker finished suite {task.suite_id}",
         )
 
     @staticmethod
@@ -134,8 +135,11 @@ class MemoryWorkerRunner:
 
         loader = LegacyYamlCompatLoader()
         document = loader.load_from_path(yaml_path)
-        run_definition = loader.to_run_definition(document, run_name="legacy:%s" % yaml_path)
-        variables = dict(task.payload.get("variables") or {})
+        run_definition = loader.to_run_definition(document, run_name=f"legacy:{yaml_path}")
+        variables = MemoryWorkerRunner._merge_environment_variables(
+            task=task,
+            variables=dict(task.payload.get("variables") or {}),
+        )
         if hasattr(run_definition, "model_copy"):
             run_definition = run_definition.model_copy(
                 update={"variables": variables},
@@ -154,15 +158,9 @@ class MemoryWorkerRunner:
         return WorkerExecutionResult(
             status=status,
             status_message=(
-                "legacy yaml executed from %s: total=%s passed=%s failed=%s errors=%s skipped=%s"
-                % (
-                    yaml_path,
-                    summary.total,
-                    summary.passed,
-                    summary.failed,
-                    summary.errors,
-                    summary.skipped,
-                )
+                f"legacy yaml executed from {yaml_path}: total={summary.total} "
+                f"passed={summary.passed} failed={summary.failed} "
+                f"errors={summary.errors} skipped={summary.skipped}"
             ),
         )
 
@@ -183,6 +181,21 @@ class MemoryWorkerRunner:
         else:
             run_definition = TestRunDefinition.parse_obj(raw_run_definition)
 
+        merged_variables = MemoryWorkerRunner._merge_environment_variables(
+            task=task,
+            variables=dict(getattr(run_definition, "variables", {}) or {}),
+        )
+        if hasattr(run_definition, "model_copy"):
+            run_definition = run_definition.model_copy(
+                update={"variables": merged_variables},
+                deep=True,
+            )
+        else:
+            run_definition = run_definition.copy(
+                update={"variables": merged_variables},
+                deep=True,
+            )
+
         engine = MemoryWorkerRunner._build_engine_for_task(task)
         result = engine.execute_run(run_definition)
         summary = result.summary
@@ -190,14 +203,9 @@ class MemoryWorkerRunner:
         return WorkerExecutionResult(
             status=status,
             status_message=(
-                "standard run executed: total=%s passed=%s failed=%s errors=%s skipped=%s"
-                % (
-                    summary.total,
-                    summary.passed,
-                    summary.failed,
-                    summary.errors,
-                    summary.skipped,
-                )
+                f"standard run executed: total={summary.total} "
+                f"passed={summary.passed} failed={summary.failed} "
+                f"errors={summary.errors} skipped={summary.skipped}"
             ),
         )
 
@@ -216,7 +224,7 @@ class MemoryWorkerRunner:
         per_case_responses = dict(task.payload.get("mock_case_responses") or {})
         case_response = dict(per_case_responses.get(case_id) or {})
 
-        merged: Dict[str, object] = {
+        merged: dict[str, object] = {
             **default_response,
             **case_response,
         }
@@ -251,10 +259,30 @@ class MemoryWorkerRunner:
 
         return TestFlowEngine(
             transport=CallableTransport(
-                lambda request, context, case: MemoryWorkerRunner._build_mock_response(task, case.case_id)
+                lambda request, context, case: MemoryWorkerRunner._build_mock_response(
+                    task,
+                    case.case_id,
+                )
             ),
             plugins=plugins,
         )
+
+    @staticmethod
+    def _merge_environment_variables(
+        task: DispatchTask,
+        variables: dict[str, object],
+    ) -> dict[str, object]:
+        """把 payload 中的 environment 快照并入执行变量。"""
+
+        merged = deepcopy(variables)
+        environment = dict(task.payload.get("environment") or {})
+        if not environment:
+            return merged
+
+        merged.setdefault("environment", environment)
+        if not merged.get("host") and environment.get("base_url"):
+            merged["host"] = environment["base_url"]
+        return merged
 
     @staticmethod
     def _map_engine_status(status: ExecutionStatus) -> RunStatus:

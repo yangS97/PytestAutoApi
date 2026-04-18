@@ -13,23 +13,12 @@
 from dataclasses import dataclass
 from hashlib import md5
 from pathlib import Path
-from typing import Dict, List
+from typing import Optional
 
 import yaml
+from fastapi import HTTPException, status
 
-from testflow_engine import (
-    AssertionOperator,
-    AssertionSource,
-    AssertionSpec,
-    BodyType,
-    BootstrapAuthPlugin,
-    ExtractionSource,
-    ExtractionSpec,
-    HttpMethod,
-    RequestSpec,
-    TestCaseDefinition,
-    TestRunDefinition,
-)
+from pyta_platform_backend.repositories.management_repository import InMemoryManagementRepository
 from pyta_platform_backend.schemas.demo_suite import (
     CreateDemoSuiteRunRequest,
     CreateDemoSuiteRunResponse,
@@ -38,6 +27,18 @@ from pyta_platform_backend.schemas.demo_suite import (
 )
 from pyta_platform_backend.schemas.run import CreateRunRequest
 from pyta_platform_backend.services.run_service import RunService
+from testflow_engine import (
+    AssertionOperator,
+    AssertionSource,
+    AssertionSpec,
+    BodyType,
+    ExtractionSource,
+    ExtractionSpec,
+    HttpMethod,
+    RequestSpec,
+    TestCaseDefinition,
+    TestRunDefinition,
+)
 
 
 @dataclass(frozen=True)
@@ -50,14 +51,19 @@ class DemoSuiteDefinition:
     source: str
     run_definition: TestRunDefinition
     supports_live_http: bool = True
-    mock_case_responses: Dict[str, Dict[str, object]] = None
+    mock_case_responses: dict[str, dict[str, object]] = None
 
 
 class DemoSuiteService:
     """管理样例套件目录，并负责把它们转换成 run 创建请求。"""
 
-    def __init__(self, run_service: RunService) -> None:
+    def __init__(
+        self,
+        run_service: RunService,
+        management_repository: Optional[InMemoryManagementRepository] = None,
+    ) -> None:
         self._run_service = run_service
+        self._management_repository = management_repository
         self._default_host = self._load_default_host()
         self._suites = self._build_demo_suites()
 
@@ -86,7 +92,7 @@ class DemoSuiteService:
         """把样例套件提交为平台 run。"""
 
         suite = self._get_suite(suite_id)
-        host = request.host_override or self._default_host
+        host = self._resolve_host_for_run(request)
         transport_mode = "mock" if request.mode.strip().lower() == "mock" else "live"
 
         run_definition = self._copy_run_with_variables(
@@ -104,6 +110,7 @@ class DemoSuiteService:
         response = self._run_service.create_run(
             CreateRunRequest(
                 suite_id=suite.suite_id,
+                environment_id=request.environment_id,
                 trigger_source="demo-suite",
                 requested_by=request.requested_by,
                 payload=run_payload,
@@ -113,9 +120,28 @@ class DemoSuiteService:
             run_id=response.run_id,
             status=response.status,
             dispatch_channel=response.dispatch_channel,
+            environment_id=response.environment_id,
+            environment_name=response.environment_name,
             suite_id=suite.suite_id,
             mode=transport_mode,
         )
+
+    def _resolve_host_for_run(self, request: CreateDemoSuiteRunRequest) -> str:
+        """为 demo run 解析最终 host。"""
+
+        if request.host_override:
+            return request.host_override.rstrip("/")
+
+        if request.environment_id and self._management_repository is not None:
+            environment = self._management_repository.get_environment_by_id(request.environment_id)
+            if environment is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"environment 不存在: {request.environment_id}",
+                )
+            return environment.base_url
+
+        return self._default_host
 
     def _get_suite(self, suite_id: str) -> DemoSuiteDefinition:
         """读取指定样例套件。"""
@@ -123,9 +149,12 @@ class DemoSuiteService:
         try:
             return self._suites[suite_id]
         except KeyError as exc:
-            raise ValueError("未知样例套件: %s" % suite_id) from exc
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"未知样例套件: {suite_id}",
+            ) from exc
 
-    def _build_demo_suites(self) -> Dict[str, DemoSuiteDefinition]:
+    def _build_demo_suites(self) -> dict[str, DemoSuiteDefinition]:
         """构造当前两组演示套件。"""
 
         login_suite = self._build_login_suite()
@@ -418,13 +447,13 @@ class DemoSuiteService:
             expected=expected,
         )
 
-    def _build_variables_for_suite(self, suite_id: str, host: str) -> Dict[str, object]:
+    def _build_variables_for_suite(self, suite_id: str, host: str) -> dict[str, object]:
         """为样例套件构造运行时变量。"""
 
-        variables: Dict[str, object] = {"host": host}
+        variables: dict[str, object] = {"host": host}
         if suite_id == "demo-persona-library":
             variables["auth_bootstrap"] = {
-                "login_url": "%s/api/v1/user/password_login" % host.rstrip("/"),
+                "login_url": f"{host.rstrip('/')}/api/v1/user/password_login",
                 "request_mode": "json",
                 "headers": {"Content-Type": "application/json"},
                 "body": {
@@ -441,7 +470,10 @@ class DemoSuiteService:
         return variables
 
     @staticmethod
-    def _copy_run_with_variables(run_definition: TestRunDefinition, variables: Dict[str, object]) -> TestRunDefinition:
+    def _copy_run_with_variables(
+        run_definition: TestRunDefinition,
+        variables: dict[str, object],
+    ) -> TestRunDefinition:
         """为本次执行复制 run，并注入运行时变量。"""
 
         if hasattr(run_definition, "model_copy"):
@@ -449,7 +481,7 @@ class DemoSuiteService:
         return run_definition.copy(update={"variables": variables}, deep=True)
 
     @staticmethod
-    def _dump_model(model) -> Dict[str, object]:
+    def _dump_model(model) -> dict[str, object]:
         """兼容 Pydantic v1/v2 的 dump。"""
 
         if hasattr(model, "model_dump"):
@@ -460,7 +492,7 @@ class DemoSuiteService:
     def _login_password_md5() -> str:
         """复用旧登录逻辑中的密码哈希。"""
 
-        return md5("yanji2026!".encode()).hexdigest()
+        return md5(b"yanji2026!").hexdigest()
 
     @staticmethod
     def _load_default_host() -> str:
@@ -474,4 +506,3 @@ class DemoSuiteService:
         with config_path.open("r", encoding="utf-8") as file:
             payload = yaml.safe_load(file) or {}
         return str(payload.get("host") or "https://api-test.yanjiai.com").rstrip("/")
-

@@ -5,6 +5,7 @@
         title="调度任务占位"
         description="第一阶段调度只需轻量能力：谁在什么时间触发哪个套件或用例。"
       >
+        <p v-if="errorMessage" class="state-banner state-banner--error">{{ errorMessage }}</p>
         <div v-if="loading" class="empty-copy">正在加载调度任务...</div>
 
         <div v-else class="table-shell">
@@ -14,6 +15,7 @@
                 <th>任务名</th>
                 <th>Cron</th>
                 <th>目标</th>
+                <th>环境</th>
                 <th>最近执行</th>
                 <th>状态</th>
               </tr>
@@ -23,6 +25,7 @@
                 <td>{{ item.name }}</td>
                 <td>{{ item.cron }}</td>
                 <td>{{ item.target }}</td>
+                <td>{{ item.environmentLabel || '未绑定' }}</td>
                 <td>{{ item.lastRun }}</td>
                 <td>
                   <StatusTag
@@ -57,10 +60,12 @@ import { managementApi } from '@/api';
 import PlaceholderPanel from '@/components/common/PlaceholderPanel.vue';
 import StatusTag from '@/components/common/StatusTag.vue';
 import type { ScheduleSummary } from '@/types/platform';
+import { resolveApiErrorMessage } from '@/utils/apiErrors';
 
 // 调度页只承接轻量计划任务，不把真正长任务执行塞进前端页面。
 const schedules = ref<ScheduleSummary[]>([]);
 const loading = ref(false);
+const errorMessage = ref('');
 
 const scheduleStatusLabelMap = {
   active: '已启用',
@@ -69,14 +74,18 @@ const scheduleStatusLabelMap = {
 
 const loadSchedules = async () => {
   loading.value = true;
+  errorMessage.value = '';
 
   try {
     schedules.value = await managementApi.listSchedules();
+  } catch (error) {
+    errorMessage.value = resolveApiErrorMessage(error, '调度任务加载失败，请稍后重试。');
   } finally {
     loading.value = false;
   }
 };
 
-onMounted(loadSchedules);
+onMounted(() => {
+  void loadSchedules();
+});
 </script>
-

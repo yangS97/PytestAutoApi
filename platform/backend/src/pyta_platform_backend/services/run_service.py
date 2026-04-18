@@ -1,7 +1,11 @@
 """run 业务服务层。"""
 
+from copy import deepcopy
+from typing import Optional
+
 from fastapi import HTTPException, status
 
+from pyta_platform_backend.repositories.management_repository import InMemoryManagementRepository
 from pyta_platform_backend.repositories.run_repository import InMemoryRunRepository, RunRecord
 from pyta_platform_backend.schemas.run import (
     CreateRunRequest,
@@ -24,9 +28,11 @@ class RunService:
         self,
         repository: InMemoryRunRepository,
         dispatcher: MemoryRunDispatcher,
+        management_repository: Optional[InMemoryManagementRepository] = None,
     ) -> None:
         self._repository = repository
         self._dispatcher = dispatcher
+        self._management_repository = management_repository
 
     @property
     def repository(self) -> InMemoryRunRepository:
@@ -41,12 +47,14 @@ class RunService:
         return self._dispatcher
 
     def create_run(self, payload: CreateRunRequest) -> CreateRunResponse:
-        """创建 run 并投递到 worker。
+        """创建 run 并投递到 worker。"""
 
-        这里不做任何长任务执行，只把必要信息整理好后交给 dispatcher。
-        """
-
-        record: RunRecord = self._repository.create_pending_run(payload)
+        environment = self._resolve_environment(payload.environment_id)
+        prepared_payload = self._prepare_run_request(payload, environment=environment)
+        record: RunRecord = self._repository.create_pending_run(
+            prepared_payload,
+            environment_name=environment.name if environment else None,
+        )
         self._dispatcher.dispatch(
             DispatchTask(
                 run_id=record.run_id,
@@ -61,6 +69,8 @@ class RunService:
             run_id=record.run_id,
             status=record.status,
             dispatch_channel=self._dispatcher.channel_name,
+            environment_id=record.environment_id,
+            environment_name=record.environment_name,
         )
 
     def list_runs(self, limit: int = 20, offset: int = 0) -> ListRunsResponse:
@@ -77,21 +87,59 @@ class RunService:
         if detail is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="run 不存在: %s" % run_id,
+                detail=f"run 不存在: {run_id}",
             )
         return detail
 
     def update_run_status(self, run_id: str, payload: UpdateRunStatusRequest) -> RunDetailResponse:
-        """更新 run 状态。
-
-        第一阶段的状态流转保持宽松，只做“有记录才允许更新”的最小规则。
-        等 worker 真正接起来后，再补更严格的状态机校验。
-        """
+        """更新 run 状态。"""
 
         detail = self._repository.update_status(run_id=run_id, payload=payload)
         if detail is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="run 不存在: %s" % run_id,
+                detail=f"run 不存在: {run_id}",
             )
         return detail
+
+    def _resolve_environment(self, environment_id: Optional[str]):
+        """解析 environment_id，并返回对应环境记录。"""
+
+        if not environment_id:
+            return None
+        if self._management_repository is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="当前 run service 未接入 environment 仓储，无法解析 environment_id",
+            )
+
+        environment = self._management_repository.get_environment_by_id(environment_id)
+        if environment is not None:
+            return environment
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"environment 不存在: {environment_id}",
+        )
+
+    @staticmethod
+    def _prepare_run_request(
+        payload: CreateRunRequest,
+        *,
+        environment,
+    ) -> CreateRunRequest:
+        """把 environment 快照写入运行时 payload。"""
+
+        runtime_payload = deepcopy(payload.payload)
+        if environment is not None:
+            runtime_payload["environment"] = {
+                "id": environment.id,
+                "name": environment.name,
+                "base_url": environment.base_url,
+                "auth_mode": environment.auth_mode,
+                "variables": deepcopy(environment.variables),
+            }
+
+        if hasattr(payload, "model_copy"):
+            return payload.model_copy(update={"payload": runtime_payload}, deep=True)
+        return payload.copy(update={"payload": runtime_payload}, deep=True)

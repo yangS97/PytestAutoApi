@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -20,9 +20,10 @@ class CreateRunRequest(BaseModel):
     """创建 run 的最小请求体。"""
 
     suite_id: str = Field(..., description="要执行的测试套件或计划标识")
+    environment_id: Optional[str] = Field(None, description="要使用的环境资源 ID")
     trigger_source: str = Field("manual", description="触发来源，例如 manual / scheduler")
     requested_by: str = Field("platform-user", description="请求发起者")
-    payload: Dict[str, Any] = Field(default_factory=dict, description="运行时附加参数")
+    payload: dict[str, Any] = Field(default_factory=dict, description="运行时附加参数")
 
 
 class CreateRunResponse(BaseModel):
@@ -31,6 +32,8 @@ class CreateRunResponse(BaseModel):
     run_id: str
     status: RunStatus
     dispatch_channel: str
+    environment_id: Optional[str] = None
+    environment_name: Optional[str] = None
 
 
 class RunSummaryResponse(BaseModel):
@@ -41,6 +44,8 @@ class RunSummaryResponse(BaseModel):
 
     run_id: str
     suite_id: str
+    environment_id: Optional[str] = None
+    environment_name: Optional[str] = None
     trigger_source: str
     requested_by: str
     status: RunStatus
@@ -56,7 +61,7 @@ class RunDetailResponse(RunSummaryResponse):
     详情页会补充 payload 和最近一次状态说明，方便平台排障或给 worker 回传状态时查看。
     """
 
-    payload: Dict[str, Any] = Field(default_factory=dict)
+    payload: dict[str, Any] = Field(default_factory=dict)
     status_message: Optional[str] = Field(None, description="最近一次状态更新的附加说明")
 
 
@@ -66,7 +71,7 @@ class ListRunsResponse(BaseModel):
     total: int
     limit: int
     offset: int
-    items: List[RunSummaryResponse] = Field(default_factory=list)
+    items: list[RunSummaryResponse] = Field(default_factory=list)
 
 
 class UpdateRunStatusRequest(BaseModel):

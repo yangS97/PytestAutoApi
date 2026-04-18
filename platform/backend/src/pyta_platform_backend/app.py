@@ -4,17 +4,22 @@ from fastapi import FastAPI
 
 from pyta_platform_backend.api.router import register_routes
 from pyta_platform_backend.config import BackendSettings
+from pyta_platform_backend.repositories.management_repository import InMemoryManagementRepository
 from pyta_platform_backend.repositories.run_repository import InMemoryRunRepository
 from pyta_platform_backend.scheduler.lightweight_scheduler import LightweightScheduler
 from pyta_platform_backend.services.dashboard_service import DashboardService
 from pyta_platform_backend.services.demo_suite_service import DemoSuiteService
+from pyta_platform_backend.services.management_service import ManagementService
 from pyta_platform_backend.services.run_service import RunService
 from pyta_platform_backend.services.worker_control_service import WorkerControlService
 from pyta_platform_backend.workers.dispatcher import MemoryRunDispatcher
 from pyta_platform_backend.workers.runner import MemoryWorkerRunner
 
 
-def build_default_run_service(settings: BackendSettings) -> RunService:
+def build_default_run_service(
+    settings: BackendSettings,
+    management_repository: InMemoryManagementRepository = None,
+) -> RunService:
     """组装默认的 run service。
 
     这里明确体现第一阶段的边界：
@@ -24,7 +29,11 @@ def build_default_run_service(settings: BackendSettings) -> RunService:
 
     repository = InMemoryRunRepository()
     dispatcher = MemoryRunDispatcher(channel_name=settings.run_dispatch_channel)
-    return RunService(repository=repository, dispatcher=dispatcher)
+    return RunService(
+        repository=repository,
+        dispatcher=dispatcher,
+        management_repository=management_repository,
+    )
 
 
 def create_app(
@@ -39,12 +48,23 @@ def create_app(
     """
 
     resolved_settings = settings or BackendSettings.from_env()
-    resolved_run_service = run_service or build_default_run_service(resolved_settings)
+    shared_management_repository = InMemoryManagementRepository()
+    resolved_run_service = run_service or build_default_run_service(
+        resolved_settings,
+        management_repository=shared_management_repository,
+    )
     resolved_scheduler = scheduler or LightweightScheduler(
         poll_interval_seconds=resolved_settings.scheduler_poll_interval_seconds
     )
     resolved_dashboard_service = DashboardService(repository=resolved_run_service.repository)
-    resolved_demo_suite_service = DemoSuiteService(run_service=resolved_run_service)
+    resolved_demo_suite_service = DemoSuiteService(
+        run_service=resolved_run_service,
+        management_repository=shared_management_repository,
+    )
+    resolved_management_service = ManagementService(
+        repository=shared_management_repository,
+        run_repository=resolved_run_service.repository,
+    )
     resolved_worker_runner = MemoryWorkerRunner(
         dispatcher=resolved_run_service.dispatcher,
         run_service=resolved_run_service,
@@ -63,6 +83,7 @@ def create_app(
     app.state.scheduler = resolved_scheduler
     app.state.dashboard_service = resolved_dashboard_service
     app.state.demo_suite_service = resolved_demo_suite_service
+    app.state.management_service = resolved_management_service
     app.state.worker_runner = resolved_worker_runner
     app.state.worker_control_service = resolved_worker_control_service
 
@@ -72,6 +93,7 @@ def create_app(
         run_service=resolved_run_service,
         dashboard_service=resolved_dashboard_service,
         demo_suite_service=resolved_demo_suite_service,
+        management_service=resolved_management_service,
         worker_control_service=resolved_worker_control_service,
     )
     return app

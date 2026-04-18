@@ -53,6 +53,8 @@ export interface RunSummary {
   id: string;
   name: string;
   target: string;
+  environmentId?: string;
+  environmentLabel?: string;
   status: RunStatus;
   startedAt: string;
   duration: string;
@@ -93,11 +95,31 @@ export interface EnvironmentSummary {
   status: 'online' | 'draft';
 }
 
+export interface EnvironmentDetail extends EnvironmentSummary {
+  variables: Record<string, unknown>;
+}
+
+export interface CreateEnvironmentPayload {
+  name: string;
+  baseUrl: string;
+  authMode: string;
+  status: 'online' | 'draft';
+}
+
+export interface UpdateEnvironmentPayload {
+  name?: string;
+  baseUrl?: string;
+  authMode?: string;
+  status?: 'online' | 'draft';
+}
+
 export interface ScheduleSummary {
   id: string;
   name: string;
   cron: string;
   target: string;
+  environmentId?: string;
+  environmentLabel?: string;
   lastRun: string;
   status: 'active' | 'paused';
 }

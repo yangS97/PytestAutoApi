@@ -5,6 +5,7 @@
         title="用例目录占位"
         description="先固定列表结构：名称、模块、请求方法、优先级、启用状态。后续再接筛选器和编辑器。"
       >
+        <p v-if="errorMessage" class="state-banner state-banner--error">{{ errorMessage }}</p>
         <div v-if="loading" class="empty-copy">正在加载用例列表...</div>
 
         <div v-else class="table-shell">
@@ -57,11 +58,13 @@ import { managementApi } from '@/api';
 import PlaceholderPanel from '@/components/common/PlaceholderPanel.vue';
 import StatusTag from '@/components/common/StatusTag.vue';
 import type { CaseSummary } from '@/types/platform';
+import { resolveApiErrorMessage } from '@/utils/apiErrors';
 
 // 用例页当前只做“列表骨架 + 拆分建议”，
 // 真实编辑器、断言设计器和变量提取面板后续再按模块拆出去。
 const cases = ref<CaseSummary[]>([]);
 const loading = ref(false);
+const errorMessage = ref('');
 
 const caseStatusLabelMap = {
   active: '已启用',
@@ -70,14 +73,18 @@ const caseStatusLabelMap = {
 
 const loadCases = async () => {
   loading.value = true;
+  errorMessage.value = '';
 
   try {
     cases.value = await managementApi.listCases();
+  } catch (error) {
+    errorMessage.value = resolveApiErrorMessage(error, '用例列表加载失败，请稍后重试。');
   } finally {
     loading.value = false;
   }
 };
 
-onMounted(loadCases);
+onMounted(() => {
+  void loadCases();
+});
 </script>
-

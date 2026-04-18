@@ -110,6 +110,14 @@ export const apiClient = {
   post<T>(path: string, body?: RequestOptions['body']) {
     return this.request<T>(path, { method: 'POST', body });
   },
+
+  patch<T>(path: string, body?: RequestOptions['body']) {
+    return this.request<T>(path, { method: 'PATCH', body });
+  },
+
+  delete<T>(path: string) {
+    return this.request<T>(path, { method: 'DELETE' });
+  },
 };
 
 export const isApiError = (error: unknown): error is ApiError => error instanceof ApiError;

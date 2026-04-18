@@ -5,9 +5,10 @@
 """
 
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from types import ModuleType, SimpleNamespace
-from typing import Callable, List, Optional, Sequence, Set
+from typing import Callable, Optional
 
 
 class HTTPException(Exception):
@@ -39,11 +40,11 @@ class RouteRecord:
     """记录测试里关心的最小路由信息。"""
 
     path: str
-    methods: Set[str]
+    methods: set[str]
     endpoint: Callable
     response_model: Optional[object]
     status_code: int
-    tags: List[str]
+    tags: list[str]
 
 
 class _RouterBase:
@@ -52,7 +53,7 @@ class _RouterBase:
     def __init__(self, prefix: str = "", tags: Optional[Sequence[str]] = None) -> None:
         self.prefix = prefix
         self.tags = list(tags or [])
-        self.routes: List[RouteRecord] = []
+        self.routes: list[RouteRecord] = []
 
     def get(self, path: str, response_model=None, status_code: int = 200):
         return self._build_decorator(
@@ -73,6 +74,14 @@ class _RouterBase:
     def patch(self, path: str, response_model=None, status_code: int = 200):
         return self._build_decorator(
             methods={"PATCH"},
+            path=path,
+            response_model=response_model,
+            status_code=status_code,
+        )
+
+    def delete(self, path: str, response_model=None, status_code: int = 200):
+        return self._build_decorator(
+            methods={"DELETE"},
             path=path,
             response_model=response_model,
             status_code=status_code,
@@ -134,8 +143,11 @@ def install_fake_fastapi(monkeypatch) -> ModuleType:
     fake_module.HTTPException = HTTPException
     fake_module.status = SimpleNamespace(
         HTTP_200_OK=200,
+        HTTP_201_CREATED=201,
         HTTP_202_ACCEPTED=202,
+        HTTP_400_BAD_REQUEST=400,
         HTTP_404_NOT_FOUND=404,
+        HTTP_409_CONFLICT=409,
     )
     monkeypatch.setitem(sys.modules, "fastapi", fake_module)
     return fake_module

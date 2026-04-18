@@ -1,6 +1,6 @@
 """演示/迁移样例套件相关 schema。"""
 
-from typing import List, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -25,7 +25,7 @@ class DemoSuiteSummaryResponse(BaseModel):
 class ListDemoSuitesResponse(BaseModel):
     """样例套件列表响应。"""
 
-    items: List[DemoSuiteSummaryResponse] = Field(default_factory=list)
+    items: list[DemoSuiteSummaryResponse] = Field(default_factory=list)
 
 
 class CreateDemoSuiteRunRequest(BaseModel):
@@ -38,6 +38,7 @@ class CreateDemoSuiteRunRequest(BaseModel):
 
     mode: str = Field("live", description="运行模式：live / mock")
     requested_by: str = Field("platform-user", description="发起人")
+    environment_id: Optional[str] = Field(None, description="可选：绑定平台环境资源 ID")
     host_override: Optional[str] = Field(None, description="可选：覆盖默认 host")
 
 
@@ -46,4 +47,3 @@ class CreateDemoSuiteRunResponse(CreateRunResponse):
 
     suite_id: str
     mode: str
-

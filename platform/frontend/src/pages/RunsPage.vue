@@ -47,6 +47,7 @@
               <tr>
                 <th>运行名称</th>
                 <th>目标</th>
+                <th>环境</th>
                 <th>触发人</th>
                 <th>开始时间</th>
                 <th>耗时</th>
@@ -76,6 +77,7 @@
                   </div>
                 </td>
                 <td>{{ item.target }}</td>
+                <td>{{ item.environmentLabel || '未绑定' }}</td>
                 <td>{{ item.starter }}</td>
                 <td>{{ item.startedAt }}</td>
                 <td>{{ item.duration }}</td>
@@ -109,6 +111,7 @@
 
             <div class="detail-pill-row">
               <span class="detail-pill">目标：{{ selectedRun.target }}</span>
+              <span class="detail-pill">环境：{{ selectedRun.environmentLabel || '未绑定' }}</span>
               <span class="detail-pill">数据源：{{ sourceLabel }}</span>
               <span class="detail-pill">原始状态：{{ selectedRun.rawStatus || '未回传' }}</span>
             </div>
@@ -191,6 +194,7 @@ import MetricCard from '@/components/common/MetricCard.vue';
 import PlaceholderPanel from '@/components/common/PlaceholderPanel.vue';
 import StatusTag from '@/components/common/StatusTag.vue';
 import type { ApiDataSource, DashboardMetric, RunSummary } from '@/types/platform';
+import { resolveApiErrorMessage } from '@/utils/apiErrors';
 import { getRunStatusInsight, getRunStatusMeta } from '@/utils/runStatus';
 
 interface RunDetailField {
@@ -376,6 +380,11 @@ const selectedContextFields = computed<RunDetailField[]>(() => {
       value: targetContext.identifier,
     },
     {
+      key: 'environment',
+      label: '环境',
+      value: run.environmentLabel || '未绑定',
+    },
+    {
       key: 'starter',
       label: '触发人',
       value: run.starter,
@@ -487,7 +496,7 @@ const loadRuns = async () => {
     note.value = '';
     selectedRunId.value = '';
     lastLoadedAt.value = '';
-    errorMessage.value = error instanceof Error ? error.message : '运行记录加载失败，请稍后重试。';
+    errorMessage.value = resolveApiErrorMessage(error, '运行记录加载失败，请稍后重试。');
   } finally {
     loading.value = false;
   }
@@ -562,42 +571,10 @@ onMounted(() => {
   gap: 1rem;
 }
 
-.action-button {
-  min-height: 2.25rem;
-  padding: 0.55rem 0.9rem;
-  border: 0;
-  border-radius: 999px;
-  background: var(--color-accent-strong);
-  color: var(--color-ink-inverse);
-  cursor: pointer;
-}
-
-.action-button:disabled {
-  opacity: 0.65;
-  cursor: wait;
-}
-
 .panel-tip {
   margin: 0;
   color: var(--color-ink-subtle);
   line-height: 1.75;
-}
-
-.state-banner {
-  margin: 0;
-  padding: 0.9rem 1rem;
-  border-radius: 1rem;
-  line-height: 1.7;
-}
-
-.state-banner--info {
-  background: rgba(59, 130, 246, 0.08);
-  color: #1d4ed8;
-}
-
-.state-banner--error {
-  background: rgba(244, 63, 94, 0.08);
-  color: #be123c;
 }
 
 .run-name {

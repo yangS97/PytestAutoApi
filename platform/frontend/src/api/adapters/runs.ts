@@ -105,6 +105,10 @@ export const normalizeRunSummary = (payload: unknown, index: number): RunSummary
     id: readFirstString(payload.id, payload.run_id) || `run-${index}`,
     name: readFirstString(payload.name, payload.title) || target || `运行 ${index + 1}`,
     target: target || '未标记目标',
+    environmentId:
+      readFirstString(payload.environment_id, payload.environmentId) || undefined,
+    environmentLabel:
+      readFirstString(payload.environment_name, payload.environmentName) || undefined,
     status: normalizeRunStatus(rawStatus),
     startedAt: formatDateTime(payload.started_at ?? payload.startedAt ?? payload.created_at ?? payload.createdAt),
     duration: formatDuration(payload.duration ?? payload.duration_ms ?? payload.elapsed_ms, rawStatus),

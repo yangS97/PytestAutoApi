@@ -230,23 +230,6 @@ onMounted(async () => {
   box-shadow: var(--shadow-soft);
 }
 
-.state-banner {
-  margin: 0;
-  padding: 0.95rem 1rem;
-  border-radius: 1rem;
-  line-height: 1.7;
-}
-
-.state-banner--info {
-  background: rgba(59, 130, 246, 0.08);
-  color: #1d4ed8;
-}
-
-.state-banner--error {
-  background: rgba(244, 63, 94, 0.08);
-  color: #be123c;
-}
-
 .empty-card {
   display: grid;
   gap: 1rem;
@@ -256,21 +239,6 @@ onMounted(async () => {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-soft);
-}
-
-.action-button {
-  min-height: 2.25rem;
-  padding: 0.55rem 0.9rem;
-  border: 0;
-  border-radius: 999px;
-  background: var(--color-accent-strong);
-  color: var(--color-ink-inverse);
-  cursor: pointer;
-}
-
-.action-button:disabled {
-  opacity: 0.65;
-  cursor: wait;
 }
 
 .metrics-grid {

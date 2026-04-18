@@ -1,12 +1,23 @@
 import { apiClient, isApiError } from '@/api/client';
+import {
+  extractManagementCollection,
+  normalizeCaseSummary,
+  normalizeEnvironmentDetail,
+  normalizeEnvironmentSummary,
+  normalizeScheduleSummary,
+  normalizeSuiteSummary,
+} from '@/api/adapters/management';
 import { extractRunCollection, normalizeRunSummary } from '@/api/adapters/runs';
 import type {
   ApiResolvedData,
   CaseSummary,
+  CreateEnvironmentPayload,
+  EnvironmentDetail,
   EnvironmentSummary,
   RunSummary,
   ScheduleSummary,
   SuiteSummary,
+  UpdateEnvironmentPayload,
 } from '@/types/platform';
 
 /**
@@ -41,6 +52,8 @@ const runMocks: RunSummary[] = [
     id: 'run-201',
     name: '支付回归',
     target: 'suite/payment-regression',
+    environmentId: 'env-001',
+    environmentLabel: '测试环境',
     status: 'failed',
     startedAt: '今天 08:40',
     duration: '11m 02s',
@@ -53,6 +66,8 @@ const runMocks: RunSummary[] = [
     id: 'run-202',
     name: '用户信息更新',
     target: 'case/user-profile-update',
+    environmentId: 'env-002',
+    environmentLabel: '预发环境',
     status: 'success',
     startedAt: '今天 10:12',
     duration: '38s',
@@ -64,6 +79,8 @@ const runMocks: RunSummary[] = [
     id: 'run-203',
     name: '登录链路晨检',
     target: 'suite/login-smoke',
+    environmentId: 'env-001',
+    environmentLabel: '测试环境',
     status: 'queued',
     startedAt: '今天 10:18',
     duration: '等待调度',
@@ -75,6 +92,8 @@ const runMocks: RunSummary[] = [
     id: 'run-204',
     name: '租户配置巡检',
     target: 'suite/tenant-check',
+    environmentId: 'env-002',
+    environmentLabel: '预发环境',
     status: 'running',
     startedAt: '今天 10:25',
     duration: '执行中',
@@ -86,6 +105,8 @@ const runMocks: RunSummary[] = [
     id: 'run-205',
     name: '跨租户 smoke',
     target: 'suite/cross-tenant-smoke',
+    environmentId: 'env-001',
+    environmentLabel: '测试环境',
     status: 'warning',
     startedAt: '今天 10:31',
     duration: '2m 14s',
@@ -101,6 +122,8 @@ const scheduleMocks: ScheduleSummary[] = [
     name: '工作日晨检',
     cron: '0 9 * * 1-5',
     target: 'suite/login-smoke',
+    environmentId: 'env-001',
+    environmentLabel: '测试环境',
     lastRun: '今天 09:00',
     status: 'active',
   },
@@ -109,6 +132,8 @@ const scheduleMocks: ScheduleSummary[] = [
     name: '夜间回归',
     cron: '0 22 * * *',
     target: 'suite/core-regression',
+    environmentId: 'env-002',
+    environmentLabel: '预发环境',
     lastRun: '昨天 22:00',
     status: 'paused',
   },
@@ -126,6 +151,30 @@ const shouldFallbackToMock = (error: unknown) => {
   return [404, 405, 501, 502, 503, 504].includes(error.status);
 };
 
+const loadMockCases = async (): Promise<CaseSummary[]> => {
+  await wait();
+  return caseMocks;
+};
+
+const loadMockSuites = async (): Promise<SuiteSummary[]> => {
+  await wait();
+  return suiteMocks;
+};
+
+const loadMockEnvironments = async (): Promise<EnvironmentSummary[]> => {
+  await wait();
+  return environmentMocks;
+};
+
+const loadMockEnvironmentDetail = async (environmentId: string): Promise<EnvironmentDetail> => {
+  await wait();
+  const matched = environmentMocks.find((item) => item.id === environmentId) ?? environmentMocks[0];
+  return {
+    ...matched,
+    variables: {},
+  };
+};
+
 const loadMockRuns = async (note?: string): Promise<ApiResolvedData<RunSummary[]>> => {
   await wait();
   return {
@@ -135,32 +184,120 @@ const loadMockRuns = async (note?: string): Promise<ApiResolvedData<RunSummary[]
   };
 };
 
+const loadMockSchedules = async (): Promise<ScheduleSummary[]> => {
+  await wait();
+  return scheduleMocks;
+};
+
 export const managementApi = {
   async listCases() {
     if (forceMock) {
-      await wait();
-      return caseMocks;
+      return loadMockCases();
     }
 
-    return apiClient.get<CaseSummary[]>('/cases');
+    try {
+      const payload = await apiClient.get<unknown>('/cases');
+      return extractManagementCollection(payload).map((item, index) => normalizeCaseSummary(item, index));
+    } catch (error) {
+      if (shouldFallbackToMock(error)) {
+        return loadMockCases();
+      }
+
+      throw error;
+    }
   },
 
   async listSuites() {
     if (forceMock) {
-      await wait();
-      return suiteMocks;
+      return loadMockSuites();
     }
 
-    return apiClient.get<SuiteSummary[]>('/suites');
+    try {
+      const payload = await apiClient.get<unknown>('/suites');
+      return extractManagementCollection(payload).map((item, index) => normalizeSuiteSummary(item, index));
+    } catch (error) {
+      if (shouldFallbackToMock(error)) {
+        return loadMockSuites();
+      }
+
+      throw error;
+    }
   },
 
   async listEnvironments() {
     if (forceMock) {
-      await wait();
-      return environmentMocks;
+      return loadMockEnvironments();
     }
 
-    return apiClient.get<EnvironmentSummary[]>('/environments');
+    try {
+      const payload = await apiClient.get<unknown>('/environments');
+      return extractManagementCollection(payload).map((item, index) =>
+        normalizeEnvironmentSummary(item, index),
+      );
+    } catch (error) {
+      if (shouldFallbackToMock(error)) {
+        return loadMockEnvironments();
+      }
+
+      throw error;
+    }
+  },
+
+  async getEnvironmentDetail(environmentId: string): Promise<EnvironmentDetail> {
+    if (forceMock) {
+      return loadMockEnvironmentDetail(environmentId);
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(`/environments/${environmentId}`);
+      return normalizeEnvironmentDetail(response, 0);
+    } catch (error) {
+      if (shouldFallbackToMock(error)) {
+        return loadMockEnvironmentDetail(environmentId);
+      }
+
+      throw error;
+    }
+  },
+
+  async createEnvironment(payload: CreateEnvironmentPayload): Promise<EnvironmentDetail> {
+    if (forceMock) {
+      throw new Error('当前启用了强制 mock，环境写入不会持久化，请关闭 VITE_USE_MOCK 后再试。');
+    }
+
+    const response = await apiClient.post<unknown>('/environments', {
+      name: payload.name,
+      base_url: payload.baseUrl,
+      auth_mode: payload.authMode,
+      status: payload.status,
+    });
+    return normalizeEnvironmentDetail(response, 0);
+  },
+
+  async updateEnvironment(
+    environmentId: string,
+    payload: UpdateEnvironmentPayload,
+  ): Promise<EnvironmentDetail> {
+    if (forceMock) {
+      throw new Error('当前启用了强制 mock，环境更新不会持久化，请关闭 VITE_USE_MOCK 后再试。');
+    }
+
+    const response = await apiClient.patch<unknown>(`/environments/${environmentId}`, {
+      name: payload.name,
+      base_url: payload.baseUrl,
+      auth_mode: payload.authMode,
+      status: payload.status,
+    });
+    return normalizeEnvironmentDetail(response, 0);
+  },
+
+  async deleteEnvironment(environmentId: string): Promise<EnvironmentSummary> {
+    if (forceMock) {
+      throw new Error('当前启用了强制 mock，环境删除不会持久化，请关闭 VITE_USE_MOCK 后再试。');
+    }
+
+    const response = await apiClient.delete<unknown>(`/environments/${environmentId}`);
+    return normalizeEnvironmentSummary(response, 0);
   },
 
   /**
@@ -195,10 +332,20 @@ export const managementApi = {
 
   async listSchedules() {
     if (forceMock) {
-      await wait();
-      return scheduleMocks;
+      return loadMockSchedules();
     }
 
-    return apiClient.get<ScheduleSummary[]>('/schedules');
+    try {
+      const payload = await apiClient.get<unknown>('/schedules');
+      return extractManagementCollection(payload).map((item, index) =>
+        normalizeScheduleSummary(item, index),
+      );
+    } catch (error) {
+      if (shouldFallbackToMock(error)) {
+        return loadMockSchedules();
+      }
+
+      throw error;
+    }
   },
 };

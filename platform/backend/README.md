@@ -95,6 +95,62 @@ curl http://127.0.0.1:8000/api/v1/runs
 
 如果第一次是空列表，不是异常，而是因为当前仓库默认使用内存仓库。
 
+### 第四个验证命令
+
+```bash
+curl http://127.0.0.1:8000/api/v1/cases
+curl http://127.0.0.1:8000/api/v1/suites
+curl http://127.0.0.1:8000/api/v1/environments
+curl http://127.0.0.1:8000/api/v1/schedules
+```
+
+这组接口主要服务平台管理页，当前返回的是：
+
+* 和现代化样例套件对齐的只读目录数据
+* 由平台 `run` 主真源补齐的最近活动时间
+
+它们的目的不是先把完整 CRUD 一步做成大而全，而是先把平台管理页接回真实后端资源。
+
+### 第五个验证命令
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/environments \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "预发联调环境",
+    "base_url": "https://staging.example.com",
+    "auth_mode": "Cookie + 单点登录",
+    "status": "draft"
+  }'
+```
+
+这条命令用于验证环境管理的创建链路是否成立：
+
+* 后端能接收结构化环境配置
+* 内存仓储能完成写入
+* 前端环境页刷新后能看到真实新增项
+
+### 第六个验证命令
+
+```bash
+curl http://127.0.0.1:8000/api/v1/environments/<environment_id>
+
+curl -X PATCH http://127.0.0.1:8000/api/v1/environments/<environment_id> \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "预发联调环境-已启用",
+    "status": "online"
+  }'
+
+curl -X DELETE http://127.0.0.1:8000/api/v1/environments/<environment_id>
+```
+
+这组命令用于验证环境资源的完整闭环：
+
+* `GET /environments/{id}` 可返回详情和 variables
+* `PATCH /environments/{id}` 使用局部更新，未显式传入的字段会保留
+* `DELETE /environments/{id}` 删除成功后，环境目录应不再返回该资源
+
 ### 主动创建一条 run
 
 ```bash
