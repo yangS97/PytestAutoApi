@@ -10,7 +10,7 @@
 暂不承担完整的复杂编辑能力。
 """
 
-from typing import Dict, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -53,7 +53,7 @@ class EnvironmentDetailResponse(EnvironmentSummaryResponse):
     就不需要再重新发明一套详情结构。
     """
 
-    variables: Dict[str, object] = Field(default_factory=dict)
+    variables: dict[str, object] = Field(default_factory=dict)
 
 
 class CreateEnvironmentRequest(BaseModel):
@@ -63,7 +63,7 @@ class CreateEnvironmentRequest(BaseModel):
     base_url: str = Field(..., description="环境基础地址")
     auth_mode: str = Field(..., description="鉴权模式说明")
     status: str = Field("draft", description="环境状态：online / draft")
-    variables: Dict[str, object] = Field(default_factory=dict, description="预留：环境变量")
+    variables: dict[str, object] = Field(default_factory=dict, description="预留：环境变量")
 
 
 class CreateEnvironmentResponse(EnvironmentDetailResponse):
@@ -77,7 +77,7 @@ class UpdateEnvironmentRequest(BaseModel):
     base_url: Optional[str] = Field(None, description="环境基础地址")
     auth_mode: Optional[str] = Field(None, description="鉴权模式说明")
     status: Optional[str] = Field(None, description="环境状态：online / draft")
-    variables: Optional[Dict[str, object]] = Field(None, description="可选：环境变量")
+    variables: Optional[dict[str, object]] = Field(None, description="可选：环境变量")
 
 
 class UpdateEnvironmentResponse(EnvironmentDetailResponse):
