@@ -26,11 +26,12 @@
         description="左侧先看全量运行摘要，点击任意一行后，右侧详情区会切换到对应的排障视角。"
       >
         <template #actions>
-          <button class="action-button" type="button" :disabled="loading" @click="loadRuns">
+          <button class="action-button" type="button" :disabled="loading" @click="reloadRuns">
             {{ loading ? '加载中...' : '重新加载' }}
           </button>
         </template>
 
+        <p v-if="actionMessage" class="state-banner state-banner--info">{{ actionMessage }}</p>
         <p v-if="note" class="state-banner state-banner--info">{{ note }}</p>
         <p v-if="errorMessage" class="state-banner state-banner--error">{{ errorMessage }}</p>
         <p v-if="runs.length" class="panel-tip">点击某一行，可在右侧查看状态说明、原始状态和备注。</p>
@@ -97,6 +98,27 @@
         title="运行详情"
         description="详情区收口状态说明、基础上下文、错误/备注和统一状态映射，页面更适合作为排障入口。"
       >
+        <template #actions>
+          <div class="action-row">
+            <button
+              class="action-button action-button--secondary"
+              type="button"
+              :disabled="detailLoading || !selectedRunId"
+              @click="reloadSelectedRunDetail"
+            >
+              {{ detailLoading ? '加载中...' : '刷新详情' }}
+            </button>
+            <button
+              class="action-button"
+              type="button"
+              :disabled="rerunLoading || !canRerunSelected"
+              @click="rerunSelectedRun"
+            >
+              {{ rerunLoading ? '复跑中...' : '快速复跑' }}
+            </button>
+          </div>
+        </template>
+
         <div v-if="selectedRun && selectedRunMeta && selectedRunInsight" class="detail-stack">
           <section class="detail-hero">
             <div class="detail-hero__header">
@@ -154,6 +176,39 @@
           </section>
 
           <section class="detail-section">
+            <div class="detail-section__header">
+              <h3 class="detail-section__title">运行快照</h3>
+              <p class="detail-section__copy">
+                这里优先展示真实 `run detail` 返回的状态说明、环境快照和 payload，避免只靠列表摘要猜上下文。
+              </p>
+            </div>
+
+            <p v-if="detailErrorMessage" class="state-banner state-banner--error">
+              {{ detailErrorMessage }}
+            </p>
+            <div v-else-if="detailLoading" class="empty-copy">正在加载真实运行详情...</div>
+            <div v-else-if="selectedRunDetail" class="detail-snapshot">
+              <article v-if="selectedRunDetail.statusMessage" class="snapshot-card">
+                <h4>状态说明</h4>
+                <p>{{ selectedRunDetail.statusMessage }}</p>
+              </article>
+
+              <article v-if="selectedEnvironmentSnapshotJson" class="snapshot-card">
+                <h4>环境快照</h4>
+                <pre>{{ selectedEnvironmentSnapshotJson }}</pre>
+              </article>
+
+              <article class="snapshot-card">
+                <h4>运行 Payload</h4>
+                <pre>{{ selectedPayloadJson }}</pre>
+              </article>
+            </div>
+            <p v-else class="empty-copy">
+              当前为 {{ sourceLabel }} 数据，暂不加载真实运行详情。
+            </p>
+          </section>
+
+          <section class="detail-section">
             <h3 class="detail-section__title">建议下一步</h3>
             <ul class="hint-list">
               <li v-for="step in selectedRunInsight.nextSteps" :key="step">{{ step }}</li>
@@ -187,15 +242,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
-import { managementApi } from '@/api';
+import { executionApi, managementApi } from '@/api';
 import MetricCard from '@/components/common/MetricCard.vue';
 import PlaceholderPanel from '@/components/common/PlaceholderPanel.vue';
 import StatusTag from '@/components/common/StatusTag.vue';
-import type { ApiDataSource, DashboardMetric, RunSummary } from '@/types/platform';
+import type { ApiDataSource, DashboardMetric, RunDetail, RunSummary } from '@/types/platform';
 import { resolveApiErrorMessage } from '@/utils/apiErrors';
 import { getRunStatusInsight, getRunStatusMeta } from '@/utils/runStatus';
+import { resolveSuiteRunPreset } from '@/utils/suiteRunPresets';
 
 interface RunDetailField {
   key: string;
@@ -210,13 +267,26 @@ interface RunRemarkBlock {
   tone: 'info' | 'error' | 'neutral';
 }
 
+type UnknownRecord = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is UnknownRecord =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const route = useRoute();
+const router = useRouter();
+
 const runs = ref<RunSummary[]>([]);
 const loading = ref(false);
+const detailLoading = ref(false);
+const rerunLoading = ref(false);
 const errorMessage = ref('');
+const detailErrorMessage = ref('');
+const actionMessage = ref('');
 const note = ref('');
 const source = ref<ApiDataSource>('mock');
 const lastLoadedAt = ref('');
 const selectedRunId = ref('');
+const selectedRunDetail = ref<RunDetail | null>(null);
 
 const sourceLabelMap: Record<ApiDataSource, string> = {
   api: '真实接口',
@@ -225,6 +295,9 @@ const sourceLabelMap: Record<ApiDataSource, string> = {
 };
 
 const sourceLabel = computed(() => sourceLabelMap[source.value]);
+const routeRunId = computed(() => (typeof route.query.runId === 'string' ? route.query.runId : ''));
+
+let detailRequestToken = 0;
 
 const summaryMetrics = computed<DashboardMetric[]>(() => {
   const successCount = runs.value.filter((item) => item.status === 'success').length;
@@ -288,25 +361,56 @@ const legendItems = computed(() => [
   },
 ]);
 
-const selectRun = (runId: string) => {
+const updateRouteRunId = (runId: string) => {
+  const nextQuery = { ...route.query };
+
+  if (runId) {
+    nextQuery.runId = runId;
+  } else {
+    delete nextQuery.runId;
+  }
+
+  void router.replace({ query: nextQuery });
+};
+
+const applySelectedRunId = (runId: string) => {
   selectedRunId.value = runId;
+  if (routeRunId.value !== runId) {
+    updateRouteRunId(runId);
+  }
+};
+
+const selectRun = (runId: string) => {
+  applySelectedRunId(runId);
 };
 
 /**
  * 详情面板只维护“当前选中的 run id”。
  * 这样列表重新加载后，只需要决定选中谁，不必再维护一份可能过期的详情对象。
  */
-const syncSelectedRun = (nextRuns: RunSummary[]) => {
+const syncSelectedRun = (nextRuns: RunSummary[], preferredRunId = routeRunId.value) => {
   if (!nextRuns.length) {
     selectedRunId.value = '';
+    selectedRunDetail.value = null;
+    if (routeRunId.value) {
+      updateRouteRunId('');
+    }
+    return;
+  }
+
+  if (preferredRunId && nextRuns.some((item) => item.id === preferredRunId)) {
+    applySelectedRunId(preferredRunId);
     return;
   }
 
   if (selectedRunId.value && nextRuns.some((item) => item.id === selectedRunId.value)) {
+    if (routeRunId.value !== selectedRunId.value) {
+      updateRouteRunId(selectedRunId.value);
+    }
     return;
   }
 
-  selectedRunId.value = nextRuns[0].id;
+  applySelectedRunId(nextRuns[0].id);
 };
 
 const selectedRun = computed(() => runs.value.find((item) => item.id === selectedRunId.value) ?? null);
@@ -323,6 +427,13 @@ const selectedRunInsight = computed(() => {
   const run = selectedRun.value;
   return run ? getRunStatusInsight(run.status) : null;
 });
+
+const rerunnableSuiteId = computed(
+  () => selectedRunDetail.value?.suiteId || selectedRun.value?.suiteId || '',
+);
+const canRerunSelected = computed(
+  () => !!rerunnableSuiteId.value && resolveSuiteRunPreset(rerunnableSuiteId.value) !== null,
+);
 
 /**
  * target 目前仍是松散字符串契约，所以这里只做轻量拆分：
@@ -356,6 +467,7 @@ const inferTargetContext = (target: string) => {
 
 const selectedContextFields = computed<RunDetailField[]>(() => {
   const run = selectedRun.value;
+  const detail = selectedRunDetail.value;
 
   if (!run) {
     return [];
@@ -380,14 +492,24 @@ const selectedContextFields = computed<RunDetailField[]>(() => {
       value: targetContext.identifier,
     },
     {
+      key: 'suite-id',
+      label: '套件 ID',
+      value: detail?.suiteId || run.suiteId || '未回传',
+    },
+    {
       key: 'environment',
       label: '环境',
       value: run.environmentLabel || '未绑定',
     },
     {
-      key: 'starter',
-      label: '触发人',
-      value: run.starter,
+      key: 'requested-by',
+      label: '请求人',
+      value: detail?.requestedBy || run.starter,
+    },
+    {
+      key: 'trigger-source',
+      label: '触发来源',
+      value: detail?.triggerSource || '未回传',
     },
     {
       key: 'started-at',
@@ -431,16 +553,18 @@ const buildStatusRemark = (run: RunSummary) => {
 
 const selectedRemarkBlocks = computed<RunRemarkBlock[]>(() => {
   const run = selectedRun.value;
+  const detail = selectedRunDetail.value;
 
   if (!run) {
     return [];
   }
 
+  const primaryBody = detail?.statusMessage || run.errorSummary || buildStatusRemark(run);
   const blocks: RunRemarkBlock[] = [
     {
       key: 'status-remark',
-      title: run.status === 'failed' ? '异常提示' : '运行备注',
-      body: run.errorSummary || buildStatusRemark(run),
+      title: detail?.statusMessage ? '执行状态说明' : run.status === 'failed' ? '异常提示' : '运行备注',
+      body: primaryBody,
       tone: run.status === 'failed' ? 'error' : 'info',
     },
   ];
@@ -475,12 +599,92 @@ const selectedRemarkBlocks = computed<RunRemarkBlock[]>(() => {
   return blocks;
 });
 
+const selectedEnvironmentSnapshotJson = computed(() => {
+  const environment = selectedRunDetail.value?.payload.environment;
+
+  if (!isRecord(environment)) {
+    return '';
+  }
+
+  return JSON.stringify(environment, null, 2);
+});
+
+const selectedPayloadJson = computed(() => {
+  if (!selectedRunDetail.value) {
+    return '';
+  }
+
+  return JSON.stringify(selectedRunDetail.value.payload, null, 2);
+});
+
+const loadSelectedRunDetail = async () => {
+  if (!selectedRunId.value || source.value !== 'api') {
+    detailLoading.value = false;
+    detailErrorMessage.value = '';
+    selectedRunDetail.value = null;
+    return;
+  }
+
+  const requestToken = ++detailRequestToken;
+  detailLoading.value = true;
+  detailErrorMessage.value = '';
+  selectedRunDetail.value = null;
+
+  try {
+    const detail = await executionApi.getRunDetail(selectedRunId.value);
+    if (requestToken !== detailRequestToken) {
+      return;
+    }
+
+    selectedRunDetail.value = detail;
+  } catch (error) {
+    if (requestToken !== detailRequestToken) {
+      return;
+    }
+
+    selectedRunDetail.value = null;
+    detailErrorMessage.value = resolveApiErrorMessage(error, '运行详情加载失败，请稍后重试。');
+  } finally {
+    if (requestToken === detailRequestToken) {
+      detailLoading.value = false;
+    }
+  }
+};
+
+const reloadSelectedRunDetail = async () => {
+  await loadSelectedRunDetail();
+};
+
+const rerunSelectedRun = async () => {
+  const suiteId = rerunnableSuiteId.value;
+  if (!suiteId) {
+    return;
+  }
+
+  rerunLoading.value = true;
+  detailErrorMessage.value = '';
+
+  try {
+    const detail = await executionApi.runSuiteNow(suiteId);
+    actionMessage.value = `已基于套件 ${suiteId} 重新发起并执行一条运行。`;
+    await loadRuns({ preferredRunId: detail.id });
+  } catch (error) {
+    detailErrorMessage.value = resolveApiErrorMessage(error, '快速复跑失败，请稍后重试。');
+  } finally {
+    rerunLoading.value = false;
+  }
+};
+
+const reloadRuns = async () => {
+  await loadRuns();
+};
+
 /**
  * 页面只关心“要展示什么状态”：
  * 真实接口、mock 兜底、来源标识、最后更新时间、默认选中项，
  * 都在加载函数里一次性收口，避免模板里再分散处理。
  */
-const loadRuns = async () => {
+const loadRuns = async (options?: { preferredRunId?: string }) => {
   loading.value = true;
   errorMessage.value = '';
 
@@ -489,18 +693,36 @@ const loadRuns = async () => {
     runs.value = result.data;
     source.value = result.source;
     note.value = result.note ?? '';
-    syncSelectedRun(result.data);
+    syncSelectedRun(result.data, options?.preferredRunId || routeRunId.value);
     lastLoadedAt.value = new Date().toLocaleString('zh-CN', { hour12: false });
   } catch (error) {
     runs.value = [];
     note.value = '';
     selectedRunId.value = '';
+    selectedRunDetail.value = null;
     lastLoadedAt.value = '';
     errorMessage.value = resolveApiErrorMessage(error, '运行记录加载失败，请稍后重试。');
   } finally {
     loading.value = false;
   }
 };
+
+watch(routeRunId, (runId) => {
+  if (!runId) {
+    return;
+  }
+
+  if (runId !== selectedRunId.value && runs.value.some((item) => item.id === runId)) {
+    selectedRunId.value = runId;
+  }
+});
+
+watch(
+  () => [selectedRunId.value, source.value],
+  () => {
+    void loadSelectedRunDetail();
+  },
+);
 
 onMounted(() => {
   void loadRuns();
@@ -571,6 +793,12 @@ onMounted(() => {
   gap: 1rem;
 }
 
+.action-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .panel-tip {
   margin: 0;
   color: var(--color-ink-subtle);
@@ -634,6 +862,11 @@ onMounted(() => {
 .status-legend {
   display: grid;
   gap: 1rem;
+}
+
+.detail-snapshot {
+  display: grid;
+  gap: 0.85rem;
 }
 
 .detail-stack {
@@ -776,6 +1009,34 @@ onMounted(() => {
   background: rgba(15, 23, 42, 0.04);
   border-color: rgba(148, 163, 184, 0.14);
   color: var(--color-ink-base);
+}
+
+.snapshot-card {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  background: rgba(248, 250, 252, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.snapshot-card h4,
+.snapshot-card pre {
+  margin: 0;
+}
+
+.snapshot-card h4 {
+  font-size: 0.92rem;
+}
+
+.snapshot-card pre {
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.9rem;
+  background: rgba(15, 23, 42, 0.94);
+  color: rgba(226, 232, 240, 0.96);
+  overflow-x: auto;
+  line-height: 1.65;
+  font-size: 0.84rem;
 }
 
 .status-legend__row {

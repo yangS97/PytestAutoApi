@@ -48,11 +48,13 @@ export interface FocusItem {
 }
 
 export type RunStatus = 'queued' | 'running' | 'success' | 'failed' | 'warning';
+export type RunExecutionMode = 'mock' | 'live';
 
 export interface RunSummary {
   id: string;
   name: string;
   target: string;
+  suiteId?: string;
   environmentId?: string;
   environmentLabel?: string;
   status: RunStatus;
@@ -62,6 +64,21 @@ export interface RunSummary {
   rawStatus?: string;
   note?: string;
   errorSummary?: string;
+}
+
+export interface RunDetail extends RunSummary {
+  suiteId: string;
+  triggerSource: string;
+  requestedBy: string;
+  payload: Record<string, unknown>;
+  statusMessage?: string;
+}
+
+export interface SuiteRunPreset {
+  suiteId: string;
+  environmentId?: string;
+  mode: RunExecutionMode;
+  requestedBy: string;
 }
 
 export interface DashboardOverview {

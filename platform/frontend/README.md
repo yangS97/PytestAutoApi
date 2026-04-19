@@ -52,7 +52,7 @@
 
 ## 3. 启动前必须知道的一件事
 
-当前 `vite.config.ts` 里 **没有内置 `/api/v1` 开发代理**。
+当前 `vite.config.ts` 已经内置了 `/api` 开发代理。
 
 这意味着本地开发时如果你直接沿用：
 
@@ -60,9 +60,9 @@
 VITE_API_BASE_URL=/api/v1
 ```
 
-请求默认会打到前端开发服务器自己身上，而不是 `127.0.0.1:8000` 的 FastAPI。
+请求会默认被转发到 `http://127.0.0.1:8000` 的 FastAPI，而不是打到前端开发服务器自己身上。
 
-所以本地启动最稳的做法是显式写一个绝对地址。
+如果你的后端不跑在本机 `8000` 端口，再额外覆盖代理目标即可。
 
 ### 推荐的 `.env.local`
 
@@ -76,14 +76,20 @@ cp .env.example .env.local
 再把 `.env.local` 改成：
 
 ```dotenv
-VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
+VITE_API_BASE_URL=/api/v1
 VITE_USE_MOCK=false
+```
+
+如果你的后端地址不是默认的 `http://127.0.0.1:8000`，再补一行：
+
+```dotenv
+VITE_DEV_PROXY_TARGET=http://127.0.0.1:9000
 ```
 
 如果你只是单独看页面，不想依赖后端，可以改成：
 
 ```dotenv
-VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
+VITE_API_BASE_URL=/api/v1
 VITE_USE_MOCK=true
 ```
 

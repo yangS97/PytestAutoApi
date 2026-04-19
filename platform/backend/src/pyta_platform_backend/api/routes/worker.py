@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, status
 
+from pyta_platform_backend.schemas.run import RunDetailResponse
 from pyta_platform_backend.schemas.worker import RunNextResponse
 from pyta_platform_backend.services.worker_control_service import WorkerControlService
 
@@ -23,5 +24,18 @@ def create_worker_router(worker_control_service: WorkerControlService) -> APIRou
 
         return worker_control_service.run_next()
 
-    return router
+    @router.post(
+        "/runs/{run_id}/execute",
+        response_model=RunDetailResponse,
+        status_code=status.HTTP_200_OK,
+    )
+    def run_by_id(run_id: str) -> RunDetailResponse:
+        """立即执行指定 run_id。
 
+        这个入口专门服务单人工作台的一键运行：
+        页面创建完 run 后，不必再赌 FIFO 队列，而是直接执行这次点击对应的任务。
+        """
+
+        return worker_control_service.run_by_id(run_id)
+
+    return router

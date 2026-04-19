@@ -4,15 +4,18 @@ from fastapi import FastAPI
 
 from pyta_platform_backend.api.router import register_routes
 from pyta_platform_backend.config import BackendSettings
-from pyta_platform_backend.repositories.management_repository import InMemoryManagementRepository
-from pyta_platform_backend.repositories.run_repository import InMemoryRunRepository
+from pyta_platform_backend.repositories.management_repository import (
+    InMemoryManagementRepository,
+    SqliteManagementRepository,
+)
+from pyta_platform_backend.repositories.run_repository import InMemoryRunRepository, SqliteRunRepository
 from pyta_platform_backend.scheduler.lightweight_scheduler import LightweightScheduler
 from pyta_platform_backend.services.dashboard_service import DashboardService
 from pyta_platform_backend.services.demo_suite_service import DemoSuiteService
 from pyta_platform_backend.services.management_service import ManagementService
 from pyta_platform_backend.services.run_service import RunService
 from pyta_platform_backend.services.worker_control_service import WorkerControlService
-from pyta_platform_backend.workers.dispatcher import MemoryRunDispatcher
+from pyta_platform_backend.workers.dispatcher import DispatchTask, MemoryRunDispatcher
 from pyta_platform_backend.workers.runner import MemoryWorkerRunner
 
 
@@ -27,8 +30,21 @@ def build_default_run_service(
     - 真正的长任务执行不发生在 FastAPI 路由里
     """
 
-    repository = InMemoryRunRepository()
+    repository = SqliteRunRepository(database_path=settings.resolve_state_db_path())
     dispatcher = MemoryRunDispatcher(channel_name=settings.run_dispatch_channel)
+    for record in repository.list_queued_records():
+        # run 主记录已经持久化后，重启时需要把 queued 任务重新放回 dispatcher，
+        # 否则页面会看到“排队中”，但本地 worker 再也消费不到它。
+        dispatcher.dispatch(
+            DispatchTask(
+                run_id=record.run_id,
+                suite_id=record.suite_id,
+                trigger_source=record.trigger_source,
+                requested_by=record.requested_by,
+                payload=record.payload,
+                dispatched_at=record.created_at,
+            )
+        )
     return RunService(
         repository=repository,
         dispatcher=dispatcher,
@@ -48,7 +64,9 @@ def create_app(
     """
 
     resolved_settings = settings or BackendSettings.from_env()
-    shared_management_repository = InMemoryManagementRepository()
+    shared_management_repository = SqliteManagementRepository(
+        database_path=resolved_settings.resolve_state_db_path()
+    )
     resolved_run_service = run_service or build_default_run_service(
         resolved_settings,
         management_repository=shared_management_repository,
@@ -69,7 +87,10 @@ def create_app(
         dispatcher=resolved_run_service.dispatcher,
         run_service=resolved_run_service,
     )
-    resolved_worker_control_service = WorkerControlService(worker_runner=resolved_worker_runner)
+    resolved_worker_control_service = WorkerControlService(
+        worker_runner=resolved_worker_runner,
+        run_service=resolved_run_service,
+    )
 
     app = FastAPI(
         title=resolved_settings.app_name,

@@ -1,6 +1,7 @@
 """平台后端配置定义。"""
 
 import os
+from pathlib import Path
 
 from pydantic import BaseModel
 
@@ -21,6 +22,7 @@ class BackendSettings(BaseModel):
     api_prefix: str = "/api/v1"
     run_dispatch_channel: str = "memory-worker"
     scheduler_poll_interval_seconds: int = 30
+    state_db_path: str = ""
 
     @classmethod
     def _field_default(cls, field_name: str):
@@ -70,6 +72,10 @@ class BackendSettings(BaseModel):
                     cls._field_default("scheduler_poll_interval_seconds"),
                 )
             ),
+            "state_db_path": os.getenv(
+                "PLATFORM_BACKEND_STATE_DB_PATH",
+                cls._field_default("state_db_path"),
+            ),
         }
         return cls(**raw_values)
 
@@ -80,3 +86,21 @@ class BackendSettings(BaseModel):
         if raw_value is None:
             return default
         return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+    def resolve_state_db_path(self) -> str:
+        """解析平台状态库路径。
+
+        规则保持很克制：
+        - 显式传了 `state_db_path` 就直接使用
+        - test 环境默认走 sqlite 内存库，避免测试相互污染
+        - 其他环境默认落到仓库内 `.runtime/platform-state.sqlite3`
+        """
+
+        if self.state_db_path:
+            return self.state_db_path
+
+        if self.app_env == "test":
+            return ":memory:"
+
+        root = Path(__file__).resolve().parents[4]
+        return str(root / ".runtime" / "platform-state.sqlite3")

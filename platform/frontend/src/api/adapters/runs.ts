@@ -1,4 +1,4 @@
-import type { RunSummary } from '@/types/platform';
+import type { RunDetail, RunSummary } from '@/types/platform';
 import { normalizeRunStatus } from '@/utils/runStatus';
 
 type UnknownRecord = Record<string, unknown>;
@@ -91,6 +91,7 @@ export const normalizeRunSummary = (payload: unknown, index: number): RunSummary
       id: `run-${index}`,
       name: '未命名运行',
       target: '未知目标',
+      suiteId: undefined,
       status: 'warning',
       startedAt: '未记录',
       duration: '-',
@@ -105,6 +106,7 @@ export const normalizeRunSummary = (payload: unknown, index: number): RunSummary
     id: readFirstString(payload.id, payload.run_id) || `run-${index}`,
     name: readFirstString(payload.name, payload.title) || target || `运行 ${index + 1}`,
     target: target || '未标记目标',
+    suiteId: readFirstString(payload.suite_id, payload.suiteId) || undefined,
     environmentId:
       readFirstString(payload.environment_id, payload.environmentId) || undefined,
     environmentLabel:
@@ -129,5 +131,31 @@ export const normalizeRunSummary = (payload: unknown, index: number): RunSummary
         payload.failure_reason,
         payload.failureReason,
       ) || undefined,
+  };
+};
+
+export const normalizeRunDetail = (payload: unknown, index: number): RunDetail => {
+  const summary = normalizeRunSummary(payload, index);
+  const detailPayload =
+    isRecord(payload) && isRecord(payload.payload)
+      ? payload.payload
+      : {};
+
+  return {
+    ...summary,
+    suiteId: summary.suiteId || summary.target || `suite-${index}`,
+    triggerSource:
+      (isRecord(payload) &&
+        readFirstString(payload.trigger_source, payload.triggerSource, payload.source)) ||
+      'unknown',
+    requestedBy:
+      (isRecord(payload) &&
+        readFirstString(payload.requested_by, payload.requestedBy, payload.starter)) ||
+      summary.starter,
+    payload: detailPayload,
+    statusMessage:
+      (isRecord(payload) &&
+        readFirstString(payload.status_message, payload.statusMessage)) ||
+      undefined,
   };
 };

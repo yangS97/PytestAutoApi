@@ -54,3 +54,15 @@ class MemoryRunDispatcher:
         if not self.dispatched_tasks:
             return None
         return self.dispatched_tasks.pop(0)
+
+    def pull_by_run_id(self, run_id: str) -> Optional[DispatchTask]:
+        """按 run_id 取出指定任务，同时保留其他任务的相对顺序。
+
+        单人工作台的一键运行需要“点哪个跑哪个”，
+        不能因为队列里已有旧任务就把这次点击的目标跑偏。
+        """
+
+        for index, task in enumerate(self.dispatched_tasks):
+            if task.run_id == run_id:
+                return self.dispatched_tasks.pop(index)
+        return None

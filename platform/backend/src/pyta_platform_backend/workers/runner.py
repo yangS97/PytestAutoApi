@@ -63,6 +63,21 @@ class MemoryWorkerRunner:
         """
 
         task = self._dispatcher.pull_next()
+        return self._consume_task(task)
+
+    def run_by_id(self, run_id: str) -> Optional[RunDetailResponse]:
+        """消费指定 run_id 对应的任务。
+
+        这个入口服务 `suites` 页的一键运行：
+        用户刚刚点击创建的 run，应优先执行它自己，而不是队列里的其他旧任务。
+        """
+
+        task = self._dispatcher.pull_by_run_id(run_id)
+        return self._consume_task(task)
+
+    def _consume_task(self, task: Optional[DispatchTask]) -> Optional[RunDetailResponse]:
+        """统一消费任务并回写状态。"""
+
         if task is None:
             return None
 

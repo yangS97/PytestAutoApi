@@ -15,6 +15,7 @@ from typing import Optional
 from uuid import uuid4
 
 import yaml
+from pyta_platform_backend.repositories.sqlite_support import connect_sqlite, dump_json, load_json
 
 
 @dataclass(frozen=True)
@@ -331,3 +332,260 @@ class InMemoryManagementRepository:
         with config_path.open("r", encoding="utf-8") as file:
             payload = yaml.safe_load(file) or {}
         return str(payload.get("host") or "https://api-test.yanjiai.com").rstrip("/")
+
+
+class SqliteManagementRepository(InMemoryManagementRepository):
+    """sqlite 版管理页仓储。
+
+    当前只把真正需要跨重启保留的动态资源落盘：
+    - environments
+
+    `cases / suites / schedules` 仍然保持静态种子目录，
+    这样可以先把单人工作台最痛的“数据一重启就丢”问题解决掉，
+    而不把整个平台一次性推成重型配置系统。
+    """
+
+    def __init__(self, database_path: str) -> None:
+        default_host = self._load_default_host()
+        self._database_path = database_path
+        self._connection = connect_sqlite(self._database_path)
+        self._cases = self._build_cases()
+        self._suites = self._build_suites()
+        self._schedules = self._build_schedules()
+        self._seed_environments = self._build_environments(default_host)
+        self._initialize_tables()
+        self._ensure_seed_environments()
+
+    def list_environments(self) -> list[EnvironmentRecord]:
+        """列出环境目录。"""
+
+        rows = self._connection.execute(
+            """
+            SELECT id, name, base_url, auth_mode, status, variables_json
+            FROM environments
+            ORDER BY rowid ASC
+            """
+        ).fetchall()
+
+        return [self._row_to_environment(row) for row in rows]
+
+    def get_environment_by_id(self, environment_id: str) -> Optional[EnvironmentRecord]:
+        """按 id 读取环境。"""
+
+        row = self._connection.execute(
+            """
+            SELECT id, name, base_url, auth_mode, status, variables_json
+            FROM environments
+            WHERE id = ?
+            """,
+            (environment_id,),
+        ).fetchone()
+
+        if row is None:
+            return None
+        return self._row_to_environment(row)
+
+    def create_environment(
+        self,
+        *,
+        name: str,
+        base_url: str,
+        auth_mode: str,
+        status: str,
+        variables: dict[str, object],
+    ) -> Optional[EnvironmentRecord]:
+        """创建新的环境目录记录。"""
+
+        normalized_name = name.strip().lower()
+        if self._name_exists(self._connection, normalized_name):
+            raise ValueError(f"环境名称已存在: {name}")
+
+        record = EnvironmentRecord(
+            id=uuid4().hex,
+            name=name,
+            base_url=base_url,
+            auth_mode=auth_mode,
+            status=status,
+            variables=dict(variables),
+        )
+        self._connection.execute(
+            """
+            INSERT INTO environments (
+                id,
+                name,
+                base_url,
+                auth_mode,
+                status,
+                variables_json
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                record.id,
+                record.name,
+                record.base_url,
+                record.auth_mode,
+                record.status,
+                dump_json(record.variables),
+            ),
+        )
+        self._connection.commit()
+
+        return record
+
+    def update_environment(
+        self,
+        environment_id: str,
+        *,
+        name: str,
+        base_url: str,
+        auth_mode: str,
+        status: str,
+        variables: dict[str, object],
+    ) -> Optional[EnvironmentRecord]:
+        """更新环境目录记录。"""
+
+        existing = self._connection.execute(
+            """
+            SELECT id, name, base_url, auth_mode, status, variables_json
+            FROM environments
+            WHERE id = ?
+            """,
+            (environment_id,),
+        ).fetchone()
+        if existing is None:
+            return None
+
+        normalized_name = name.strip().lower()
+        if self._name_exists(self._connection, normalized_name, exclude_id=environment_id):
+            raise ValueError(f"环境名称已存在: {name}")
+
+        updated = EnvironmentRecord(
+            id=environment_id,
+            name=name,
+            base_url=base_url,
+            auth_mode=auth_mode,
+            status=status,
+            variables=dict(variables),
+        )
+        self._connection.execute(
+            """
+            UPDATE environments
+            SET
+                name = ?,
+                base_url = ?,
+                auth_mode = ?,
+                status = ?,
+                variables_json = ?
+            WHERE id = ?
+            """,
+            (
+                updated.name,
+                updated.base_url,
+                updated.auth_mode,
+                updated.status,
+                dump_json(updated.variables),
+                updated.id,
+            ),
+        )
+        self._connection.commit()
+
+        return updated
+
+    def delete_environment(self, environment_id: str) -> Optional[EnvironmentRecord]:
+        """删除环境目录记录。"""
+
+        row = self._connection.execute(
+            """
+            SELECT id, name, base_url, auth_mode, status, variables_json
+            FROM environments
+            WHERE id = ?
+            """,
+            (environment_id,),
+        ).fetchone()
+        if row is None:
+            return None
+
+        self._connection.execute(
+            "DELETE FROM environments WHERE id = ?",
+            (environment_id,),
+        )
+        self._connection.commit()
+
+        return self._row_to_environment(row)
+
+    def _initialize_tables(self) -> None:
+        """初始化 environments 表。"""
+
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS environments (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                base_url TEXT NOT NULL,
+                auth_mode TEXT NOT NULL,
+                status TEXT NOT NULL,
+                variables_json TEXT NOT NULL
+            )
+            """
+        )
+        self._connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_environments_name ON environments(name)"
+        )
+        self._connection.commit()
+
+    def _ensure_seed_environments(self) -> None:
+        """只在首次初始化时写入默认环境种子。"""
+
+        total = self._connection.execute("SELECT COUNT(*) FROM environments").fetchone()[0]
+        if total > 0:
+            return
+
+        for item in self._seed_environments:
+            self._connection.execute(
+                """
+                INSERT INTO environments (
+                    id,
+                    name,
+                    base_url,
+                    auth_mode,
+                    status,
+                    variables_json
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item.id,
+                    item.name,
+                    item.base_url,
+                    item.auth_mode,
+                    item.status,
+                    dump_json(item.variables),
+                ),
+            )
+        self._connection.commit()
+
+    @staticmethod
+    def _name_exists(connection, normalized_name: str, exclude_id: Optional[str] = None) -> bool:
+        """检查环境名称是否已存在。"""
+
+        row = connection.execute(
+            "SELECT id, name FROM environments",
+        ).fetchall()
+        for item in row:
+            if exclude_id and item["id"] == exclude_id:
+                continue
+            if str(item["name"]).strip().lower() == normalized_name:
+                return True
+        return False
+
+    @staticmethod
+    def _row_to_environment(row) -> EnvironmentRecord:
+        """把 sqlite 行还原为 EnvironmentRecord。"""
+
+        return EnvironmentRecord(
+            id=row["id"],
+            name=row["name"],
+            base_url=row["base_url"],
+            auth_mode=row["auth_mode"],
+            status=row["status"],
+            variables=load_json(row["variables_json"], default={}),
+        )

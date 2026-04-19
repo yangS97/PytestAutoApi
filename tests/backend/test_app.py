@@ -68,6 +68,11 @@ def test_create_app_registers_routes_and_health_endpoint(monkeypatch):
     schedules_route = _find_route(app, "/api/test/schedules", "GET")
     suites_route = _find_route(app, "/api/test/suites", "GET")
     worker_route = _find_route(app, "/api/test/worker/run-next", "POST")
+    worker_run_by_id_route = _find_route(
+        app,
+        "/api/test/worker/runs/{run_id}/execute",
+        "POST",
+    )
 
     cases_payload = cases_route.endpoint()
     overview_payload = dashboard_route.endpoint()
@@ -90,6 +95,7 @@ def test_create_app_registers_routes_and_health_endpoint(monkeypatch):
     assert schedules_payload
     assert suites_payload
     assert worker_route.status_code == 200
+    assert worker_run_by_id_route.status_code == 200
 
 
 def test_create_run_endpoint_only_persists_and_dispatches(monkeypatch):
@@ -488,6 +494,148 @@ def test_demo_suites_route_can_create_standard_run(monkeypatch):
     assert worker_result.detail is not None
     assert worker_result.detail.run_id == response.run_id
     assert worker_result.detail.status.value == "succeeded"
+
+
+def test_worker_route_can_execute_specific_run_without_consuming_other_tasks(monkeypatch):
+    """定向执行应保证“点哪个跑哪个”，而不是无脑消费 FIFO 队列头。"""
+
+    app_module, config_module, _ = _reload_backend_modules(monkeypatch)
+    settings = config_module.BackendSettings(app_env="test")
+    app = app_module.create_app(settings=settings)
+
+    create_demo_route = _find_route(app, "/api/v1/demo-suites/{suite_id}/runs", "POST")
+    run_by_id_route = _find_route(app, "/api/v1/worker/runs/{run_id}/execute", "POST")
+    detail_route = _find_route(app, "/api/v1/runs/{run_id}", "GET")
+    demo_schema_module = importlib.import_module("pyta_platform_backend.schemas.demo_suite")
+
+    first = create_demo_route.endpoint(
+        "demo-login-auth",
+        demo_schema_module.CreateDemoSuiteRunRequest(
+            mode="mock",
+            requested_by="tester",
+            environment_id="env-demo-mock",
+        ),
+    )
+    second = create_demo_route.endpoint(
+        "demo-persona-library",
+        demo_schema_module.CreateDemoSuiteRunRequest(
+            mode="mock",
+            requested_by="tester",
+            environment_id="env-demo-mock",
+        ),
+    )
+
+    executed = run_by_id_route.endpoint(second.run_id)
+
+    assert executed.run_id == second.run_id
+    assert executed.status.value == "succeeded"
+    assert len(app.state.run_service.dispatcher.dispatched_tasks) == 1
+    assert app.state.run_service.dispatcher.dispatched_tasks[0].run_id == first.run_id
+
+    first_detail = detail_route.endpoint(first.run_id)
+    assert first_detail.status.value == "queued"
+
+
+def test_sqlite_state_persists_runs_and_environments_across_app_recreation(monkeypatch, tmp_path):
+    """轻量持久化应让环境和 run 在重启后仍可读取。"""
+
+    app_module, config_module, run_schema_module = _reload_backend_modules(monkeypatch)
+    state_db_path = tmp_path / "platform-state.sqlite3"
+    settings = config_module.BackendSettings(
+        app_env="dev",
+        state_db_path=str(state_db_path),
+    )
+
+    first_app = app_module.create_app(settings=settings)
+    create_environment_route = _find_route(first_app, "/api/v1/environments", "POST")
+    detail_environment_route = _find_route(first_app, "/api/v1/environments/{environment_id}", "GET")
+    create_run_route = _find_route(first_app, "/api/v1/runs", "POST")
+    list_runs_route = _find_route(first_app, "/api/v1/runs", "GET")
+    detail_run_route = _find_route(first_app, "/api/v1/runs/{run_id}", "GET")
+    suites_route = _find_route(first_app, "/api/v1/suites", "GET")
+    management_schema_module = importlib.import_module("pyta_platform_backend.schemas.management")
+
+    created_environment = create_environment_route.endpoint(
+        management_schema_module.CreateEnvironmentRequest(
+            name="灰度环境",
+            base_url="https://gray.example.com",
+            auth_mode="Token + Header",
+            status="online",
+            variables={"tenant": "gray"},
+        )
+    )
+    created_run = create_run_route.endpoint(
+        run_schema_module.CreateRunRequest(
+            suite_id="demo-login-auth",
+            environment_id=created_environment.id,
+            trigger_source="manual",
+            requested_by="tester",
+            payload={"origin": "persistence-test"},
+        )
+    )
+
+    assert list_runs_route.endpoint(limit=20, offset=0).total == 1
+    assert detail_environment_route.endpoint(created_environment.id).variables == {"tenant": "gray"}
+    assert any(item.id == "demo-login-auth" and item.last_run != "尚未执行" for item in suites_route.endpoint())
+
+    second_app = app_module.create_app(settings=settings)
+    detail_environment_route = _find_route(second_app, "/api/v1/environments/{environment_id}", "GET")
+    list_runs_route = _find_route(second_app, "/api/v1/runs", "GET")
+    detail_run_route = _find_route(second_app, "/api/v1/runs/{run_id}", "GET")
+    suites_route = _find_route(second_app, "/api/v1/suites", "GET")
+
+    persisted_environment = detail_environment_route.endpoint(created_environment.id)
+    assert persisted_environment.name == "灰度环境"
+    assert persisted_environment.variables == {"tenant": "gray"}
+
+    persisted_runs = list_runs_route.endpoint(limit=20, offset=0)
+    assert persisted_runs.total == 1
+    assert persisted_runs.items[0].run_id == created_run.run_id
+    assert persisted_runs.items[0].environment_id == created_environment.id
+
+    persisted_run_detail = detail_run_route.endpoint(created_run.run_id)
+    assert persisted_run_detail.payload["origin"] == "persistence-test"
+    assert persisted_run_detail.payload["environment"]["id"] == created_environment.id
+
+    refreshed_suites = suites_route.endpoint()
+    assert any(item.id == "demo-login-auth" and item.last_run != "尚未执行" for item in refreshed_suites)
+
+
+def test_sqlite_state_rehydrates_queued_tasks_after_app_recreation(monkeypatch, tmp_path):
+    """重启后 queued 任务应重新进入 dispatcher，而不是只剩一条僵尸 run 记录。"""
+
+    app_module, config_module, _ = _reload_backend_modules(monkeypatch)
+    state_db_path = tmp_path / "platform-state.sqlite3"
+    settings = config_module.BackendSettings(
+        app_env="dev",
+        state_db_path=str(state_db_path),
+    )
+
+    first_app = app_module.create_app(settings=settings)
+    create_demo_route = _find_route(first_app, "/api/v1/demo-suites/{suite_id}/runs", "POST")
+    demo_schema_module = importlib.import_module("pyta_platform_backend.schemas.demo_suite")
+
+    created = create_demo_route.endpoint(
+        "demo-login-auth",
+        demo_schema_module.CreateDemoSuiteRunRequest(
+            mode="mock",
+            requested_by="tester",
+            environment_id="env-demo-mock",
+        ),
+    )
+
+    second_app = app_module.create_app(settings=settings)
+    run_by_id_route = _find_route(second_app, "/api/v1/worker/runs/{run_id}/execute", "POST")
+    detail_route = _find_route(second_app, "/api/v1/runs/{run_id}", "GET")
+
+    executed = run_by_id_route.endpoint(created.run_id)
+
+    assert executed.run_id == created.run_id
+    assert executed.status.value == "succeeded"
+
+    detail = detail_route.endpoint(created.run_id)
+    assert detail.status.value == "succeeded"
+    assert "standard run executed" in (detail.status_message or "")
 
 
 def test_worker_merges_environment_snapshot_into_execution_variables(monkeypatch):
